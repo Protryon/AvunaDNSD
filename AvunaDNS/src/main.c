@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <gnutls/gnutls.h>
 #include "tls.h"
+#include "zone.h"
 
 int main(int argc, char* argv[]) {
 	if (getuid() != 0 || getgid() != 0) {
