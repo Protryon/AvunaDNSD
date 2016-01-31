@@ -20,6 +20,7 @@
 int domeq(const char* dom1, const char* dom2, int ext) {
 	if (streq(dom1, "@")) return 1;
 	int psu = startsWith(dom1, "~");
+	if (psu && streq(dom1, "~@")) return ext;
 	if (psu && !ext) return 0;
 	char* d1 = xstrdup(dom1, 1);
 	size_t d1l = strlen(dom1);
@@ -35,6 +36,7 @@ int domeq(const char* dom1, const char* dom2, int ext) {
 		m2 = strtok_r(m2 == NULL ? d2 : NULL, ".", &sp2);
 		if (streq(d1, "*")) goto cont;
 		if (streq(d1, "**")) {
+			if (m2 == NULL) break;
 			char* nd = d1 + strlen(d1) + 1;
 			if (strlen(nd) > 0 && (!streq(nd, "*") && !streq_nocase(nd, m2))) {
 				continue;
