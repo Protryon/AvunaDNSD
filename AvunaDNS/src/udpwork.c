@@ -12,6 +12,7 @@
 #include "zone.h"
 #include "xstring.h"
 #include <errno.h>
+#include "accept.h"
 
 struct dnsheader {
 		uint16_t id;
@@ -83,32 +84,44 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 	size_t zeel = 0;
 	for (size_t i = 0; i < zone->entry_count; i++) {
 		struct zoneentry* ze = zone->entries[i];
-		if (ze->type == 0 && domeq(ze->part.subzone->domain, dq->domain) && rs < 0) {
+		if (ze->type == 0 && domeq(ze->part.subzone->domain, dq->domain, (*rrecsl) == 0) && rs < 0) {
 			parseZone(dq, ze->part.subzone, rrecs, rrecsl);
-		} else if (ze->type == 1 && domeq(ze->part.dom.domain, dq->domain) && ze->part.dom.type == dq->type) {
-			if (rs >= 0) {
-				if (zee == NULL) {
-					zee = xmalloc(sizeof(struct zoneentry*));
-					zeel = 0;
-				} else {
-					zee = xrealloc(zee, sizeof(struct zoneentry*) * (zeel + 1));
+		} else if (ze->type == 1 && (ze->part.dom.type == dq->type || ze->part.dom.pt)) {
+			int ext = 1;
+			if (startsWith(ze->part.dom.domain, "~")) {
+				for (size_t x = 0; x < *rrecsl; x++) {
+					struct dnsrecord* dr = (*rrecs)[x];
+					if (dr->type == dq->type) {
+						ext = 0;
+						break;
+					}
 				}
-				zee[zeel++] = ze;
-			} else {
-				if (*rrecs == NULL) {
-					*rrecs = xmalloc(sizeof(struct dnsrecord*));
-					(*rrecsl) = 0;
+			}
+			if (domeq(ze->part.dom.domain, dq->domain, ext)) {
+				if (rs >= 0) {
+					if (zee == NULL) {
+						zee = xmalloc(sizeof(struct zoneentry*));
+						zeel = 0;
+					} else {
+						zee = xrealloc(zee, sizeof(struct zoneentry*) * (zeel + 1));
+					}
+					zee[zeel++] = ze;
 				} else {
-					*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
+					if (*rrecs == NULL) {
+						*rrecs = xmalloc(sizeof(struct dnsrecord*));
+						(*rrecsl) = 0;
+					} else {
+						*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
+					}
+					struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+					dr->domain = dq->domain;
+					dr->type = ze->part.dom.type;
+					dr->class = 1;
+					dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
+					dr->rdlength = ze->part.dom.data_len;
+					dr->rd = ze->part.dom.data;
+					(*rrecs)[(*rrecsl)++] = dr;
 				}
-				struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
-				dr->domain = dq->domain;
-				dr->type = ze->part.dom.type;
-				dr->class = 1;
-				dr->ttl = ze->part.dom.ttl;
-				dr->rdlength = ze->part.dom.data_len;
-				dr->rd = ze->part.dom.data;
-				(*rrecs)[(*rrecsl)++] = dr;
 			}
 		} else if (ze->type == 2) {
 			rs = ze->part.rrst.per;
@@ -127,7 +140,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 						dr->domain = dq->domain;
 						dr->type = ze->part.dom.type;
 						dr->class = 1;
-						dr->ttl = ze->part.dom.ttl;
+						dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 						dr->rdlength = ze->part.dom.data_len;
 						dr->rd = ze->part.dom.data;
 						(*rrecs)[(*rrecsl)++] = dr;
@@ -150,7 +163,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							dr->domain = dq->domain;
 							dr->type = zed->part.dom.type;
 							dr->class = 1;
-							dr->ttl = zed->part.dom.ttl;
+							dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 							dr->rdlength = zed->part.dom.data_len;
 							dr->rd = zed->part.dom.data;
 							(*rrecs)[(*rrecsl)++] = dr;
@@ -173,7 +186,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 								dr->domain = dq->domain;
 								dr->type = ze->part.dom.type;
 								dr->class = 1;
-								dr->ttl = ze->part.dom.ttl;
+								dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 								dr->rdlength = ze->part.dom.data_len;
 								dr->rd = ze->part.dom.data;
 								(*rrecs)[(*rrecsl)++] = dr;
@@ -213,14 +226,14 @@ void writeDomain(char* dom, unsigned char* buf, size_t ml, size_t* cs) {
 	buf[(*cs)++] = 0;
 }
 
-void handleUDP(struct udpwork_param* param, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl) {
+void handleUDP(struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
 	if (len < 12) return;
 	struct dnsheader* head = buf;
 	head->qdcount = (head->qdcount >> 8) | ((head->qdcount & 0xff) << 8);
 	head->ancount = (head->ancount >> 8) | ((head->ancount & 0xff) << 8);
 	head->nscount = (head->nscount >> 8) | ((head->nscount & 0xff) << 8);
 	head->arcount = (head->arcount >> 8) | ((head->arcount & 0xff) << 8);
-	unsigned char* qrs = buf + 12;
+	//unsigned char* qrs = buf + 12;
 	struct dnsquestion qds[head->qdcount];
 	size_t cp = 12;
 	for (int i = 0; i < head->qdcount; i++) {
@@ -254,7 +267,7 @@ void handleUDP(struct udpwork_param* param, void* buf, size_t len, struct sockad
 		goto wr;
 	}
 	for (int x = 0; x < head->qdcount; x++) {
-		parseZone(&qds[x], param->zone, &rrecs, &rrecsl);
+		parseZone(&qds[x], zone, &rrecs, &rrecsl);
 	}
 	rhead->ancount = rrecsl;
 	wr: ;
@@ -296,7 +309,27 @@ void handleUDP(struct udpwork_param* param, void* buf, size_t len, struct sockad
 		memcpy(resp + cs, dr->rd, dr->rdlength);
 		cs += dr->rdlength;
 	}
-	sendto(param->sfd, resp, cs, 0, addr, addrl);
+	if (addr != NULL && cs > 512) {
+		rhead = (struct dnsheader*) resp;
+		cs = 512;
+		rhead->tc = 1;
+	}
+	if (addr == NULL) { //tcp
+		if (conn->writeBuffer != NULL) xfree(conn->writeBuffer);
+		resp = xrealloc(resp, cs + 2);
+		memmove(resp + 2, resp, cs);
+		uint16_t cs16 = cs;
+		cs16 = htons(cs16);
+		memcpy(resp, &cs16, 2);
+		conn->writeBuffer = resp;
+		conn->writeBuffer_size = cs + 2;
+	} else {
+		sendto(sfd, resp, cs, 0, addr, addrl); //  sendto can fail, but what we do regardless is cleanup.
+		xfree(resp);
+	}
+	for (int x = 0; x < head->qdcount; x++) {
+		xfree(qds[x].domain);
+	}
 }
 
 void run_udpwork(struct udpwork_param* param) {
@@ -307,7 +340,7 @@ void run_udpwork(struct udpwork_param* param) {
 		int x = recvfrom(param->sfd, mbuf, 512, 0, (struct sockaddr*) &addr, &addrl);
 		if (x < 0) continue; // this shouldnt happen
 		if (x > 0) {
-			handleUDP(param, mbuf, x, &addr, addrl);
+			handleUDP(param->zone, param->sfd, mbuf, x, &addr, addrl, NULL);
 		}
 	}
 	xfree(mbuf);

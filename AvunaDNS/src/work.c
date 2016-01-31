@@ -18,6 +18,9 @@
 #include "util.h"
 #include "streams.h"
 #include <sys/ioctl.h>
+#include "udpwork.h"
+#include <stdint.h>
+
 void closeConn(struct work_param* param, struct conn* conn) {
 	if (conn->tls) {
 		if (conn->handshaked) {
@@ -35,18 +38,13 @@ void closeConn(struct work_param* param, struct conn* conn) {
 }
 
 int handleRead(struct conn* conn, struct work_param* param, int fd) {
-	if (conn->readBuffer != NULL && conn->readBuffer_size > 0) {
-		if (conn->writeBuffer == NULL) {
-			conn->writeBuffer = xmalloc(conn->readBuffer_size);
-			conn->writeBuffer_size = 0;
-		} else {
-			conn->writeBuffer = xrealloc(conn->writeBuffer, conn->writeBuffer_size + conn->readBuffer_size);
+	if (conn->readBuffer != NULL && conn->readBuffer_size >= 2) {
+		uint16_t* len = (uint16_t*) conn->readBuffer;
+		uint16_t rl = htons(*len);
+		if (conn->readBuffer_size >= 2 + rl) {
+			conn->state = 1;
+			handleUDP(param->zone, -1, conn->readBuffer + 2, rl, NULL, 0, conn);
 		}
-		memcpy(conn->writeBuffer + conn->writeBuffer_size, conn->readBuffer, conn->readBuffer_size);
-		conn->writeBuffer_size += conn->readBuffer_size;
-		xfree(conn->readBuffer);
-		conn->readBuffer = NULL;
-		conn->readBuffer_size = 0;
 	}
 	return 0;
 }
@@ -207,6 +205,10 @@ void run_work(struct work_param* param) {
 					conn->writeBuffer_size = 0;
 					xfree(conn->writeBuffer);
 					conn->writeBuffer = NULL;
+				}
+				if (conn->writeBuffer_size == 0 && conn->state == 1) {
+					closeConn(param, conn);
+					goto cont;
 				}
 			}
 			cont: ;

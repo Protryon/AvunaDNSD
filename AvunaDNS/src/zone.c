@@ -17,10 +17,43 @@
 #include <stdio.h>
 #include "udpwork.h"
 
-int domeq(const char* dom1, const char* dom2) { // TODO: ~@
-	if (streq_nocase(dom1, dom2)) return 1;
+int domeq(const char* dom1, const char* dom2, int ext) {
 	if (streq(dom1, "@")) return 1;
-	return 0;
+	int psu = startsWith(dom1, "~");
+	if (psu && !ext) return 0;
+	char* d1 = xstrdup(dom1, 1);
+	size_t d1l = strlen(dom1);
+	for (size_t i = 0; i < d1l; i++) {
+		if (d1[i] == '.') d1[i] = 0;
+	}
+	d1[d1l + 1] = 0;
+	char* od1 = d1;
+	char* d2 = xstrdup(dom2, 0);
+	char* sp2 = NULL;
+	char* m2 = NULL;
+	while (strlen(d1) > 0) {
+		m2 = strtok_r(m2 == NULL ? d2 : NULL, ".", &sp2);
+		if (streq(d1, "*")) goto cont;
+		if (streq(d1, "**")) {
+			char* nd = d1 + strlen(d1) + 1;
+			if (strlen(nd) > 0 && (!streq(nd, "*") && !streq_nocase(nd, m2))) {
+				continue;
+			} else {
+				d1 = nd;
+				goto cont;
+			}
+		}
+		if (m2 == NULL || !streq_nocase(d1, m2)) {
+			xfree(od1);
+			xfree(d2);
+			return 0;
+		}
+		cont: ;
+		d1 = d1 + strlen(d1) + 1;
+	}
+	xfree(od1);
+	xfree(d2);
+	return psu ? ext : 1;
 }
 
 int addZoneEntry(struct zone* zone, struct zoneentry* entry) {
@@ -125,9 +158,24 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			de->domain = strdup(args[0]);
 			de->data_len = 0;
 			de->data = NULL;
-			de->ttl = atoi(args[2]);
+			char* dj = strchr(args[2], '-');
+			if (dj == NULL) {
+				int k = atoi(args[2]);
+				de->ttlmin = k;
+				de->ttlmax = k;
+			} else {
+				dj[0] = 0;
+				dj++;
+				de->ttlmin = atoi(args[2]);
+				de->ttlmax = atoi(dj);
+			}
 			int dt = 0; // 0 for none, 1 for ip4, 2 for ip6, 3 for domain, 4 for text
 			int da = 3;
+			de->pt = 0;
+			if (startsWith(args[1], "~")) {
+				de->pt = 1;
+				args[1]++;
+			}
 			if (streq_nocase(args[1], "a")) {
 				de->type = 1;
 				dt = 1;

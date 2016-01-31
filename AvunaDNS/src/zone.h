@@ -14,7 +14,9 @@
 struct domentry {
 		char* domain;
 		int type;
-		int ttl;
+		int pt;
+		int ttlmin;
+		int ttlmax;
 		size_t data_len;
 		void* data;
 };
@@ -40,7 +42,7 @@ struct zone {
 		size_t entry_count;
 };
 
-int domeq(const char* dom1, const char* dom2);
+int domeq(const char* dom1, const char* dom2, int ext);
 
 int addZoneEntry(struct zone* zone, struct zoneentry* entry);
 
