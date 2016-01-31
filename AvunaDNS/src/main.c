@@ -28,8 +28,6 @@
 #include "collection.h"
 #include "work.h"
 #include <sys/types.h>
-#include <gnutls/gnutls.h>
-#include "tls.h"
 #include "zone.h"
 #include "udpwork.h"
 
@@ -171,8 +169,6 @@ int main(int argc, char* argv[]) {
 		errlog(delog, "Error writing PID file: %s.", strerror(errno));
 		return 1;
 	}
-	gnutls_global_init();
-	initdh();
 	int servsl;
 	struct cnode** servs = getCatsByCat(cfg, CAT_SERVER, &servsl);
 	int sr = 0;
@@ -312,33 +308,11 @@ int main(int argc, char* argv[]) {
 			close (sfd);
 			continue;
 		}
-		const char* sssl = getConfigValue(serv, "ssl");
 		if (propo == SOCK_STREAM) {
 			struct accept_param* ap = xmalloc(sizeof(struct accept_param));
 			if (serv->id != NULL) acclog(slog, "Server %s listening for connections!", serv->id);
 			else acclog(slog, "Server listening for connections!");
-			if (sssl != NULL) {
-				struct cnode* ssln = getCatByID(cfg, sssl);
-				if (ssln == NULL) {
-					errlog(slog, "Invalid SSL node! Node not found!");
-					goto pssl;
-				}
-				const char* cert = getConfigValue(ssln, "publicKey");
-				const char* key = getConfigValue(ssln, "privateKey");
-				const char* ca = getConfigValue(ssln, "ca");
-				if (ca != NULL && access(ca, R_OK)) {
-					errlog(slog, "CA for SSL node was not valid, loading without CA!");
-					ca = NULL;
-				}
-				if (cert == NULL || key == NULL || access(cert, R_OK) || access(key, R_OK)) {
-					errlog(slog, "Invalid SSL node! No publicKey/privateKey value or cannot be read!");
-					goto pssl;
-				}
-				ap->cert = loadCert(ca, cert, key);
-			} else {
-				ap->cert = NULL;
-			}
-			pssl: ap->port = port;
+			ap->port = port;
 			ap->zone = zonep;
 			ap->server_fd = sfd;
 			ap->config = serv;
