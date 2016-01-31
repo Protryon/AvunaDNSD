@@ -18,6 +18,7 @@ struct work_param {
 		struct logsess* logsess;
 		int i;
 		int sport;
+		struct zone* zone;
 };
 
 void run_work(struct work_param* param);

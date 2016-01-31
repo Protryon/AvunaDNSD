@@ -31,6 +31,21 @@
 #include <gnutls/gnutls.h>
 #include "tls.h"
 #include "zone.h"
+#include "udpwork.h"
+
+struct udp_accept_param { // ;)
+		int works_count;
+		struct udpwork_param** works;
+		int sfd;
+};
+
+struct udptcp_accept_param {
+		int tcp;
+		union param {
+				struct accept_param* accept;
+				struct udp_accept_param udp;
+		} param;
+};
 
 int main(int argc, char* argv[]) {
 	if (getuid() != 0 || getgid() != 0) {
@@ -161,7 +176,7 @@ int main(int argc, char* argv[]) {
 	int servsl;
 	struct cnode** servs = getCatsByCat(cfg, CAT_SERVER, &servsl);
 	int sr = 0;
-	struct accept_param* aps[servsl];
+	struct udptcp_accept_param aps[servsl];
 	for (int i = 0; i < servsl; i++) {
 		struct cnode* serv = servs[i];
 		const char* bind_mode = getConfigValue(serv, "bind-mode");
@@ -169,6 +184,7 @@ int main(int argc, char* argv[]) {
 		int port = -1;
 		const char* bind_file = NULL;
 		int namespace = -1;
+		int propo = SOCK_STREAM;
 		if (streq(bind_mode, "tcp")) {
 			bind_ip = getConfigValue(serv, "bind-ip");
 			const char* bind_port = getConfigValue(serv, "bind-port");
@@ -182,6 +198,17 @@ int main(int argc, char* argv[]) {
 		} else if (streq(bind_mode, "unix")) {
 			bind_file = getConfigValue(serv, "bind-file");
 			namespace = PF_LOCAL;
+		} else if (streq(bind_mode, "udp")) {
+			bind_ip = getConfigValue(serv, "bind-ip");
+			const char* bind_port = getConfigValue(serv, "bind-port");
+			if (!strisunum(bind_port)) {
+				if (serv->id != NULL) errlog(delog, "Invalid bind-port for server: %s", serv->id);
+				else errlog(delog, "Invalid bind-port for server.");
+				continue;
+			}
+			port = atoi(bind_port);
+			namespace = PF_INET;
+			propo = SOCK_DGRAM;
 		} else {
 			if (serv->id != NULL) errlog(delog, "Invalid bind-mode for server: %s", serv->id);
 			else errlog(delog, "Invalid bind-mode for server.");
@@ -200,13 +227,13 @@ int main(int argc, char* argv[]) {
 			continue;
 		}
 		const char* mcc = getConfigValue(serv, "max-conn");
-		if (!strisunum(mcc)) {
+		if (propo == SOCK_STREAM && !strisunum(mcc)) {
 			if (serv->id != NULL) errlog(delog, "Invalid max-conn for server: %s", serv->id);
 			else errlog(delog, "Invalid max-conn for server.");
 			continue;
 		}
-		int mc = atoi(mcc);
-		int sfd = socket(namespace, SOCK_STREAM, 0);
+		int mc = propo != SOCK_STREAM ? 0 : atoi(mcc);
+		int sfd = socket(namespace, propo, 0);
 		if (sfd < 0) {
 			if (serv->id != NULL) errlog(delog, "Error creating socket for server: %s, %s", serv->id, strerror(errno));
 			else errlog(delog, "Error creating socket for server, %s", strerror(errno));
@@ -250,13 +277,13 @@ int main(int argc, char* argv[]) {
 			close (sfd);
 			continue;
 		}
-		if (listen(sfd, 50)) {
+		if (propo == SOCK_STREAM && listen(sfd, 50)) {
 			if (serv->id != NULL) errlog(delog, "Error listening on socket for server: %s, %s", serv->id, strerror(errno));
 			else errlog(delog, "Error listening on socket for server, %s", strerror(errno));
 			close (sfd);
 			continue;
 		}
-		if (fcntl(sfd, F_SETFL, fcntl(sfd, F_GETFL) | O_NONBLOCK) < 0) {
+		if (propo == SOCK_STREAM && fcntl(sfd, F_SETFL, fcntl(sfd, F_GETFL) | O_NONBLOCK) < 0) {
 			if (serv->id != NULL) errlog(delog, "Error setting non-blocking for server: %s, %s", serv->id, strerror(errno));
 			else errlog(delog, "Error setting non-blocking for server, %s", strerror(errno));
 			close (sfd);
@@ -268,46 +295,90 @@ int main(int argc, char* argv[]) {
 		slog->access_fd = lal == NULL ? NULL : fopen(lal, "a");
 		const char* lel = getConfigValue(serv, "error-log");
 		slog->error_fd = lel == NULL ? NULL : fopen(lel, "a");
+		const char* zone = getConfigValue(serv, "master-zone");
+		int zfd = -1;
+		if (zone == NULL || (zfd = open(zone, O_CREAT | O_RDONLY, 0664)) < 0) {
+			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s", serv->id);
+			else errlog(delog, "Invalid master-zone for server");
+			close (sfd);
+			continue;
+		}
+		close(zfd);
+		struct zone* zonep = xmalloc(sizeof(struct zone));
+		zonep->domain = "@";
+		if (readZone(zonep, zone, "/etc/avuna/dns/", slog) < 0) {
+			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s, %s", serv->id, strerror(errno));
+			else errlog(delog, "Invalid master-zone for server: %s", strerror(errno));
+			close (sfd);
+			continue;
+		}
 		const char* sssl = getConfigValue(serv, "ssl");
-		if (serv->id != NULL) acclog(slog, "Server %s listening for connections!", serv->id);
-		else acclog(slog, "Server listening for connections!");
-		struct accept_param* ap = xmalloc(sizeof(struct accept_param));
-		if (sssl != NULL) {
-			struct cnode* ssln = getCatByID(cfg, sssl);
-			if (ssln == NULL) {
-				errlog(slog, "Invalid SSL node! Node not found!");
-				goto pssl;
+		if (propo == SOCK_STREAM) {
+			struct accept_param* ap = xmalloc(sizeof(struct accept_param));
+			if (serv->id != NULL) acclog(slog, "Server %s listening for connections!", serv->id);
+			else acclog(slog, "Server listening for connections!");
+			if (sssl != NULL) {
+				struct cnode* ssln = getCatByID(cfg, sssl);
+				if (ssln == NULL) {
+					errlog(slog, "Invalid SSL node! Node not found!");
+					goto pssl;
+				}
+				const char* cert = getConfigValue(ssln, "publicKey");
+				const char* key = getConfigValue(ssln, "privateKey");
+				const char* ca = getConfigValue(ssln, "ca");
+				if (ca != NULL && access(ca, R_OK)) {
+					errlog(slog, "CA for SSL node was not valid, loading without CA!");
+					ca = NULL;
+				}
+				if (cert == NULL || key == NULL || access(cert, R_OK) || access(key, R_OK)) {
+					errlog(slog, "Invalid SSL node! No publicKey/privateKey value or cannot be read!");
+					goto pssl;
+				}
+				ap->cert = loadCert(ca, cert, key);
+			} else {
+				ap->cert = NULL;
 			}
-			const char* cert = getConfigValue(ssln, "publicKey");
-			const char* key = getConfigValue(ssln, "privateKey");
-			const char* ca = getConfigValue(ssln, "ca");
-			if (ca != NULL && access(ca, R_OK)) {
-				errlog(slog, "CA for SSL node was not valid, loading without CA!");
-				ca = NULL;
-			}
-			if (cert == NULL || key == NULL || access(cert, R_OK) || access(key, R_OK)) {
-				errlog(slog, "Invalid SSL node! No publicKey/privateKey value or cannot be read!");
-				goto pssl;
-			}
-			ap->cert = loadCert(ca, cert, key);
+			pssl: ap->port = port;
+			ap->zone = zonep;
+			ap->server_fd = sfd;
+			ap->config = serv;
+			ap->works_count = tc;
+			ap->works = xmalloc(sizeof(struct work_param*) * tc);
+			ap->logsess = slog;
+			struct udptcp_accept_param pt;
+			pt.tcp = 1;
+			pt.param.accept = ap;
+			aps[i] = pt;
 		} else {
-			ap->cert = NULL;
+			if (serv->id != NULL) acclog(slog, "Server %s listening!", serv->id);
+			else acclog(slog, "Server listening!");
+			struct udptcp_accept_param pt;
+			pt.tcp = 0;
+			struct udp_accept_param uap;
+			uap.works = xmalloc(sizeof(struct udpwork_param*) * tc);
+			uap.works_count = tc;
+			uap.sfd = sfd;
+			pt.param.udp = uap;
+			aps[i] = pt;
 		}
-		pssl: ap->port = port;
-		ap->server_fd = sfd;
-		ap->config = serv;
-		ap->works_count = tc;
-		ap->works = xmalloc(sizeof(struct work_param*) * tc);
-		ap->logsess = slog;
 		for (int x = 0; x < tc; x++) {
-			struct work_param* wp = xmalloc(sizeof(struct work_param));
-			wp->conns = new_collection(mc < 1 ? 0 : mc / tc, sizeof(struct conn*));
-			wp->logsess = slog;
-			wp->i = x;
-			wp->sport = port;
-			ap->works[x] = wp;
+			if (propo == SOCK_STREAM) {
+				struct work_param* wp = xmalloc(sizeof(struct work_param));
+				wp->conns = new_collection(mc < 1 ? 0 : mc / tc, sizeof(struct conn*));
+				wp->logsess = slog;
+				wp->i = x;
+				wp->sport = port;
+				wp->zone = zonep;
+				aps[i].param.accept->works[x] = wp;
+			} else {
+				struct udpwork_param* uwp = xmalloc(sizeof(struct udpwork_param));
+				uwp->logsess = slog;
+				uwp->i = x;
+				uwp->sfd = sfd;
+				uwp->zone = zonep;
+				aps[i].param.udp.works[x] = uwp;
+			}
 		}
-		aps[i] = ap;
 		sr++;
 	}
 	const char* uids = getConfigValue(dm, "uid");
@@ -327,18 +398,20 @@ int main(int argc, char* argv[]) {
 	acclog(delog, "Running as UID = %u, GID = %u, starting workers.", getuid(), getgid());
 	for (int i = 0; i < servsl; i++) {
 		pthread_t pt;
-		for (int x = 0; x < aps[i]->works_count; x++) {
-			int c = pthread_create(&pt, NULL, (void *) run_work, aps[i]->works[x]);
+		for (int x = 0; x < (aps[i].tcp ? aps[i].param.accept->works_count : aps[i].param.udp.works_count); x++) {
+			int c = aps[i].tcp ? pthread_create(&pt, NULL, (void *) run_work, aps[i].param.accept->works[x]) : pthread_create(&pt, NULL, (void *) run_udpwork, aps[i].param.udp.works[x]);
 			if (c != 0) {
 				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, this will cause occasional connection hanging @ %s server.", c, servs[i]->id);
 				else errlog(delog, "Error creating thread: pthread errno = %i, this will cause occasional connection hanging.", c);
 			}
 		}
-		int c = pthread_create(&pt, NULL, (void *) run_accept, aps[i]);
-		if (c != 0) {
-			if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, server %s is shutting down.", c, servs[i]->id);
-			else errlog(delog, "Error creating thread: pthread errno = %i, server is shutting down.", c);
-			close(aps[i]->server_fd);
+		if (aps[i].tcp) {
+			int c = pthread_create(&pt, NULL, (void *) run_accept, aps[i].param.accept);
+			if (c != 0) {
+				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, server %s is shutting down.", c, servs[i]->id);
+				else errlog(delog, "Error creating thread: pthread errno = %i, server is shutting down.", c);
+				close(aps[i].param.accept->server_fd);
+			}
 		}
 	}
 	while (sr > 0)

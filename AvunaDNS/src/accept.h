@@ -22,12 +22,14 @@ struct accept_param {
 		struct work_param** works;
 		struct logsess* logsess;
 		struct cert* cert;
+		struct zone* zone;
 };
 
 struct conn {
 		int fd;
 		struct sockaddr addr;
 		socklen_t addrlen;
+		int tcp;
 		unsigned char* readBuffer;
 		size_t readBuffer_size;
 		size_t readBuffer_checked;

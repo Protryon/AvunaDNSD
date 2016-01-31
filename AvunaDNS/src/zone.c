@@ -12,6 +12,10 @@
 #include "xstring.h"
 #include <errno.h>
 #include "log.h"
+#include <ctype.h>
+#include <arpa/inet.h>
+#include <stdio.h>
+#include "udpwork.h"
 
 int domeq(const char* dom1, const char* dom2) { // TODO: ~@
 	if (streq_nocase(dom1, dom2)) return 1;
@@ -104,7 +108,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 		} else if (streq_nocase(args[0], "$roundstart")) {
 			struct zoneentry entry;
 			entry.type = 2;
-			entry.part.rrst.per = atoi(args[2]);
+			entry.part.rrst.per = atoi(args[1]);
 			addZoneEntry(zone, &entry);
 		} else if (streq_nocase(args[0], "$roundstop")) {
 			struct zoneentry entry;
@@ -229,25 +233,14 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 					continue;
 				}
 			} else if (dt == 3) {
-				size_t sl = strlen(args[da]);
-				int ed = sl > 0 && args[da][sl - 1] == '.';
-				size_t fl = sl + 1 + (!ed ? 1 : 0);
-				char* dd = xmalloc(fl);
-				for (int i = 0; i < sl; i++) {
-					if (args[da][i] == '.') dd[i] = 0;
-					else dd[i] = args[da][i];
-				}
-				if (!ed) {
-					dd[fl - 2] = '.';
-					dd[fl - 1] = 0;
-				}
+				size_t sl = strlen(args[da]) + 2;
 				if (de->data == NULL) {
-					de->data = xmalloc(fl);
+					de->data = xmalloc(sl);
 				} else {
-					de->data = xrealloc(de->data, de->data_len + fl - 1);
+					de->data = xrealloc(de->data, de->data_len + sl);
 				}
-				memcpy(de->data + de->data_len, dd, fl - 1);
-				de->data_len += fl - 1;
+				writeDomain(args[da], de->data, sl + de->data_len, &de->data_len);
+				//de->data_len += sl;
 			} else if (dt == 4) {
 				size_t sl = strlen(args[da]);
 				if (de->data == NULL) {
@@ -261,7 +254,8 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			addZoneEntry(zone, &entry);
 		}
 	}
-	if (ret < 0) return -1;
+	close(fd);
+	//if (ret < 0) return -1;
 	return 0;
 }
 
