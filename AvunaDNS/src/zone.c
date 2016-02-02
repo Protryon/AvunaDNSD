@@ -71,6 +71,30 @@ int addZoneEntry(struct zone* zone, struct zoneentry* entry) {
 	return 0;
 }
 
+const char* typeString(int type) {
+	if (type == 1) return "A";
+	else if (type == 2) return "NS";
+	else if (type == 5) return "CNAME";
+	else if (type == 6) return "SOA";
+	else if (type == 12) return "PTR";
+	else if (type == 15) return "MX";
+	else if (type == 16) return "TXT";
+	else if (type == 17) return "RP";
+	else if (type == 28) return "AAAA";
+	else if (type == 33) return "SRV";
+	else if (type == 37) return "CERT";
+	else if (type == 39) return "DNAME";
+	else if (type == 44) return "SSHFP";
+	else if (type == 45) return "IPSECKEY";
+	else if (type == 49) return "DHCID";
+	else if (type == 52) return "TLSA";
+	else if (type == 255) return "*";
+	else if (type == 257) return "CAA";
+	static char p[32];
+	snprintf(p, 32, "%i", type);
+	return p;
+}
+
 int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) {
 	zone->entry_count = 0;
 	zone->entries = NULL;
@@ -174,6 +198,23 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			int dt = 0; // 0 for none, 1 for ip4, 2 for ip6, 3 for domain, 4 for text
 			int da = 3;
 			de->pt = 0;
+			char* desc = NULL;
+			size_t sltb = 0;
+			for (int i = 3; i < ai; i++) {
+				size_t slt = strlen(args[i]);
+				if (desc == NULL) {
+					desc = xmalloc(slt + 2);
+				} else {
+					desc = xrealloc(desc, sltb + 2);
+				}
+				memcpy(desc + sltb, args[i], slt);
+				sltb += slt;
+				desc[sltb++] = ' ';
+				desc[sltb] = 0;
+			}
+			if (desc != NULL) desc[sltb - 1] = 0;
+			else desc = "";
+			de->pdata = desc;
 			if (startsWith(args[1], "~")) {
 				de->pt = 1;
 				args[1]++;

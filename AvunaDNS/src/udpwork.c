@@ -13,20 +13,17 @@
 #include "xstring.h"
 #include <errno.h>
 #include "accept.h"
+#include <arpa/inet.h>
 
 struct dnsheader {
 		uint16_t id;
 		uint8_t rd :1;
 		uint8_t tc :1;
-
 		uint8_t aa :1;
-
 		uint8_t opcode :4;
-
 		uint8_t QR :1;
 		uint8_t rcode :4;
 		uint8_t z :3;
-
 		uint8_t ra :1;
 		uint16_t qdcount;
 		uint16_t ancount;
@@ -38,6 +35,7 @@ struct dnsquestion {
 		char* domain;
 		uint16_t type;
 		;uint16_t class;
+		int logged;
 		// formatting issue is fixed with an extra semicolon?
 };
 
@@ -48,6 +46,8 @@ struct dnsrecord {
 		int32_t ttl;
 		uint16_t rdlength;
 		unsigned char* rd;
+		struct dnsquestion* from;
+		char* pdata;
 };
 
 char* readDomain(unsigned char* data, size_t* doff, size_t len) {
@@ -114,6 +114,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 						*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
 					}
 					struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+					dr->from = dq;
+					dr->pdata = ze->part.dom.pdata;
 					dr->domain = dq->domain;
 					dr->type = ze->part.dom.type;
 					dr->class = 1;
@@ -137,6 +139,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
 						}
 						struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+						dr->from = dq;
+						dr->pdata = ze->part.dom.pdata;
 						dr->domain = dq->domain;
 						dr->type = ze->part.dom.type;
 						dr->class = 1;
@@ -160,6 +164,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 								*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
 							}
 							struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+							dr->from = dq;
+							dr->pdata = ze->part.dom.pdata;
 							dr->domain = dq->domain;
 							dr->type = zed->part.dom.type;
 							dr->class = 1;
@@ -183,6 +189,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 									*rrecs = xrealloc(*rrecs, sizeof(struct dnsrecord*) * ((*rrecsl) + 1));
 								}
 								struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+								dr->from = dq;
+								dr->pdata = ze->part.dom.pdata;
 								dr->domain = dq->domain;
 								dr->type = ze->part.dom.type;
 								dr->class = 1;
@@ -196,10 +204,9 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 					}
 				}
 			}
-			if (zee != NULL) free(zee);
+			if (zee != NULL) xfree(zee);
 			zee = NULL;
 			zeel = 0;
-
 			rs = -1;
 		}
 	}
@@ -226,7 +233,7 @@ void writeDomain(char* dom, unsigned char* buf, size_t ml, size_t* cs) {
 	buf[(*cs)++] = 0;
 }
 
-void handleUDP(struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
+void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
 	if (len < 12) return;
 	struct dnsheader* head = buf;
 	head->qdcount = (head->qdcount >> 8) | ((head->qdcount & 0xff) << 8);
@@ -238,6 +245,7 @@ void handleUDP(struct zone* zone, int sfd, void* buf, size_t len, struct sockadd
 	size_t cp = 12;
 	for (int i = 0; i < head->qdcount; i++) {
 		qds[i].domain = readDomain(buf, &cp, len);
+		qds[i].logged = 0;
 		uint16_t* tt = buf + cp;
 		qds[i].type = htons(*tt);
 		cp += 2;
@@ -327,7 +335,33 @@ void handleUDP(struct zone* zone, int sfd, void* buf, size_t len, struct sockadd
 		sendto(sfd, resp, cs, 0, addr, addrl); //  sendto can fail, but what we do regardless is cleanup.
 		xfree(resp);
 	}
+	char tip[48];
+	const char* mip = tip;
+	struct sockaddr* sa = conn == NULL ? addr : (struct sockaddr*) &conn->addr;
+	if (sa->sa_family == AF_INET) {
+		struct sockaddr_in *sip4 = (struct sockaddr_in*) sa;
+		inet_ntop(AF_INET, &sip4->sin_addr, tip, 48);
+	} else if (sa->sa_family == AF_INET6) {
+		struct sockaddr_in6 *sip6 = (struct sockaddr_in6*) sa;
+		if (memseq((unsigned char*) &sip6->sin6_addr, 10, 0) && memseq((unsigned char*) &sip6->sin6_addr + 10, 2, 0xff)) {
+			inet_ntop(AF_INET, ((unsigned char*) &sip6->sin6_addr) + 12, tip, 48);
+		} else inet_ntop(AF_INET6, &sip6->sin6_addr, tip, 48);
+	} else if (sa->sa_family == AF_LOCAL) {
+		mip = "UNIX";
+	} else {
+		mip = "UNKNOWN";
+	}
+	for (int i = 0; i < rrecsl; i++) {
+		struct dnsrecord* dr = rrecs[i];
+		acclog(log, "%s requested %s for %s, returned %s %s", mip, typeString(rrecs[i]->from->type), rrecs[i]->from->domain, typeString(rrecs[i]->type), rrecs[i]->pdata);
+		rrecs[i]->from->logged = 1;
+		xfree(dr);
+	}
+	if (rrecs != NULL) xfree(rrecs);
 	for (int x = 0; x < head->qdcount; x++) {
+		if (!qds[x].logged) {
+			acclog(log, "%s requested %s for %s, returned nothing", mip, typeString(qds[x].type), qds[x].domain);
+		}
 		xfree(qds[x].domain);
 	}
 }
@@ -340,7 +374,7 @@ void run_udpwork(struct udpwork_param* param) {
 		int x = recvfrom(param->sfd, mbuf, 512, 0, (struct sockaddr*) &addr, &addrl);
 		if (x < 0) continue; // this shouldnt happen
 		if (x > 0) {
-			handleUDP(param->zone, param->sfd, mbuf, x, &addr, addrl, NULL);
+			handleUDP(param->logsess, param->zone, param->sfd, mbuf, x, &addr, addrl, NULL);
 		}
 	}
 	xfree(mbuf);

@@ -19,6 +19,7 @@ struct domentry {
 		int ttlmax;
 		size_t data_len;
 		void* data;
+		char* pdata;
 };
 
 struct roundrobin {
@@ -41,6 +42,8 @@ struct zone {
 		struct zoneentry** entries;
 		size_t entry_count;
 };
+
+const char* typeString(int type);
 
 int domeq(const char* dom1, const char* dom2, int ext);
 

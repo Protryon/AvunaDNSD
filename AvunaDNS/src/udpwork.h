@@ -22,6 +22,6 @@ struct udpwork_param {
 
 void writeDomain(char* dom, unsigned char* buf, size_t ml, size_t* cs);
 void run_udpwork(struct udpwork_param* param);
-void handleUDP(struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn);
+void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn);
 
 #endif /* UDPWORK_H_ */

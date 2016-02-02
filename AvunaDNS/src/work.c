@@ -37,7 +37,7 @@ int handleRead(struct conn* conn, struct work_param* param, int fd) {
 		uint16_t rl = htons(*len);
 		if (conn->readBuffer_size >= 2 + rl) {
 			conn->state = 1;
-			handleUDP(param->zone, -1, conn->readBuffer + 2, rl, NULL, 0, conn);
+			handleUDP(param->logsess, param->zone, -1, conn->readBuffer + 2, rl, NULL, 0, conn);
 		}
 	}
 	return 0;

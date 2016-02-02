@@ -11,6 +11,7 @@
 #include <linux/limits.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <stdio.h>
 
 void* xmalloc(size_t size) {
 	if (size > 10485760) {
@@ -100,6 +101,16 @@ int memeq(const unsigned char* mem1, size_t mem1_size, const unsigned char* mem2
 	if (mem1_size != mem2_size) return 0;
 	for (int i = 0; i < mem1_size; i++) {
 		if (mem1[i] != mem2[i]) {
+			return 0;
+		}
+	}
+	return 1;
+}
+
+int memseq(const unsigned char* mem, size_t mem_size, const unsigned char c) {
+	if (mem == NULL) return 0;
+	for (int i = 0; i < mem_size; i++) {
+		if (mem[i] != c) {
 			return 0;
 		}
 	}
