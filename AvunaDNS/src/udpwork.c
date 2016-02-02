@@ -14,6 +14,7 @@
 #include <errno.h>
 #include "accept.h"
 #include <arpa/inet.h>
+#include "version.h"
 
 struct dnsheader {
 		uint16_t id;
@@ -78,10 +79,32 @@ char* readDomain(unsigned char* data, size_t* doff, size_t len) {
 	return dom;
 }
 
+char* dver = NULL;
+
 void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rrecs, size_t* rrecsl) {
 	int rs = -1;
 	struct zoneentry** zee = NULL;
 	size_t zeel = 0;
+	if (streq_nocase(dq->domain, "version.bind") && dq->type == 16) {
+		*rrecs = xmalloc(sizeof(struct dnsrecord*));
+		*rrecsl = 1;
+		if (dver == NULL) {
+			dver = xmalloc(2 + strlen("AvunaDNSD-" VERSION));
+			dver[0] = 15;
+			memcpy(dver + 1, "AvunaDNSD-" VERSION, strlen("AvunaDNSD-" VERSION));;
+		}
+		struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
+		dr->class = 1;
+		dr->domain = dq->domain;
+		dr->from = dq;
+		dr->rd = (unsigned char*) dver;
+		dr->rdlength = strlen(dver);
+		dr->ttl = 3600;
+		dr->type = 16;
+		dr->pdata = ("AvunaDNSD-" VERSION);
+		(*rrecs)[0] = dr;
+		return;
+	}
 	for (size_t i = 0; i < zone->entry_count; i++) {
 		struct zoneentry* ze = zone->entries[i];
 		if (ze->type == 0 && domeq(ze->part.subzone->domain, dq->domain, (*rrecsl) == 0) && rs < 0) {
@@ -240,7 +263,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 	head->ancount = (head->ancount >> 8) | ((head->ancount & 0xff) << 8);
 	head->nscount = (head->nscount >> 8) | ((head->nscount & 0xff) << 8);
 	head->arcount = (head->arcount >> 8) | ((head->arcount & 0xff) << 8);
-	//unsigned char* qrs = buf + 12;
+//unsigned char* qrs = buf + 12;
 	struct dnsquestion qds[head->qdcount];
 	size_t cp = 12;
 	for (int i = 0; i < head->qdcount; i++) {
@@ -253,7 +276,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		qds[i].class = htons(*tt);
 		cp += 2;
 	}
-	//as a authoritative server only, we only need to see up to questions.
+//as a authoritative server only, we only need to see up to questions.
 	struct dnsheader* rhead = xmalloc(sizeof(struct dnsheader));
 	rhead->id = head->id;
 	rhead->rd = 0;
