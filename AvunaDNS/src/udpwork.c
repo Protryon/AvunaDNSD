@@ -49,6 +49,7 @@ struct dnsrecord {
 		unsigned char* rd;
 		struct dnsquestion* from;
 		char* pdata;
+		char* ad;
 };
 
 char* readDomain(unsigned char* data, size_t* doff, size_t len) {
@@ -62,7 +63,10 @@ char* readDomain(unsigned char* data, size_t* doff, size_t len) {
 		i++;
 		if (!f) *doff = i;
 		if ((x & 0xC0) == 0xC0) { // compressed
-			i = i & 0x3F;
+			uint16_t pt = 0;
+			pt = (i & 0x3F) << 8;
+			if (i + 1 < len) pt |= data[i + 1];
+			i = pt;
 			f = 1;
 		}
 		if (i >= len || i < 0) break;
@@ -97,6 +101,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 		dr->class = 1;
 		dr->domain = dq->domain;
 		dr->from = dq;
+		dr->ad = NULL;
 		dr->rd = (unsigned char*) dver;
 		dr->rdlength = strlen(dver);
 		dr->ttl = 3600;
@@ -145,6 +150,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 					dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 					dr->rdlength = ze->part.dom.data_len;
 					dr->rd = ze->part.dom.data;
+					dr->ad = ze->part.dom.ad;
 					(*rrecs)[(*rrecsl)++] = dr;
 				}
 			}
@@ -170,6 +176,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 						dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 						dr->rdlength = ze->part.dom.data_len;
 						dr->rd = ze->part.dom.data;
+						dr->ad = ze->part.dom.ad;
 						(*rrecs)[(*rrecsl)++] = dr;
 					}
 				} else {
@@ -195,6 +202,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 							dr->rdlength = zed->part.dom.data_len;
 							dr->rd = zed->part.dom.data;
+							dr->ad = ze->part.dom.ad;
 							(*rrecs)[(*rrecsl)++] = dr;
 							x++;
 							if (x == zeel) x = 0;
@@ -220,6 +228,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 								dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
 								dr->rdlength = ze->part.dom.data_len;
 								dr->rd = ze->part.dom.data;
+								dr->ad = ze->part.dom.ad;
 								(*rrecs)[(*rrecsl)++] = dr;
 								break;
 							}
@@ -235,21 +244,76 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 	}
 }
 
-void writeDomain(char* dom, unsigned char* buf, size_t ml, size_t* cs) {
+void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t* cs) {
 	size_t sd = strlen(dom);
 	if (sd + 2 + *cs > ml) {
 		return;
+	}
+	if (compress) {
+		size_t dl = strlen(dom) + 1;
+		size_t mlx = 0;
+		size_t mi = 0;
+		for (size_t x = 1; x < (ml < 16384 ? ml : 16384); x++) {
+			if (buf[x] == dom[mlx] || dom[mlx] == '.') {
+				if (mi == 0) mi = x;
+				mlx++;
+				if (mlx == dl) {
+					break;
+				}
+			} else {
+				mlx = 0;
+				mi = 0;
+			}
+		}
+		if (mlx != dl) mi = 0;
+		if (mi > 0) {
+			mi--;
+			buf[*cs] = 0xC0 | ((mi & 0x3F00) >> 8);
+			(*cs)++;
+			buf[*cs] = mi & 0xFF;
+			(*cs)++;
+			return;
+		}
 	}
 	unsigned char* lb = buf + *cs;
 	*lb = 0;
 	(*cs)++;
 	for (size_t i = 0; i < sd; i++) {
 		if (dom[i] == '.') {
+			//dom should be something like .com\0 or .example.com\0
+			if (compress) {
+				size_t dl = strlen(dom + i) + 1;
+				size_t mlx = 0;
+				size_t mi = 0;
+				for (size_t x = 1; x < (ml < 16384 ? ml : 16384); x++) {
+					if (buf[x] == dom[mlx + i] || dom[mlx + i] == '.') {
+						if (mi == 0) mi = x;
+						mlx++;
+						if (mlx == dl) {
+							break;
+						}
+					} else {
+						mlx = 0;
+						mi = 0;
+					}
+				}
+				if (mlx != dl) mi = 0;
+				if (mi > 0) {
+					buf[*cs] = 0xC0 | ((mi & 0x3F00) >> 8);
+					(*cs)++;
+					buf[*cs] = mi & 0xFF;
+					(*cs)++;
+					return;
+				}
+			}
 			lb = buf + *cs;
 			*lb = 0;
 		} else {
 			(*lb)++;
-			buf[*cs] = dom[i];
+			if (*lb >= 63) {
+				lb = buf + *cs;
+				*lb = 0;
+			} else buf[*cs] = dom[i];
 		}
 		(*cs)++;
 	}
@@ -312,7 +376,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		struct dnsquestion* dq = &(qds[i]);
 		size_t al = strlen(dq->domain) + 2 + 4;
 		resp = xrealloc(resp, cs + al);
-		writeDomain(dq->domain, resp, cs + al, &cs);
+		writeDomain(1, dq->domain, resp, cs + al, &cs);
 		uint16_t tt = htons(dq->type);
 		memcpy(resp + cs, &tt, 2);
 		cs += 2;
@@ -323,8 +387,9 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 	for (int i = 0; i < rrecsl; i++) {
 		struct dnsrecord* dr = rrecs[i];
 		size_t al = strlen(dr->domain) + 2 + 10 + dr->rdlength;
-		resp = xrealloc(resp, cs + al);
-		writeDomain(dr->domain, resp, cs + al, &cs);
+		size_t pal = dr->ad == NULL ? 0 : strlen(dr->ad) + 2;
+		resp = xrealloc(resp, cs + al + pal);
+		writeDomain(1, dr->domain, resp, cs + al + pal, &cs);
 		uint16_t t = htons(dr->type);
 		memcpy(resp + cs, &t, 2);
 		cs += 2;
@@ -334,6 +399,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		int32_t ttl = htonl(dr->ttl);
 		memcpy(resp + cs, &ttl, 4);
 		cs += 4;
+		if (dr->ad != NULL) writeDomain(1, dr->ad, resp, cs + al + pal, &cs);
 		t = htons(dr->rdlength);
 		memcpy(resp + cs, &t, 2);
 		cs += 2;

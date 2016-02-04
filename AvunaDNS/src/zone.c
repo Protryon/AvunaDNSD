@@ -181,6 +181,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			struct zoneentry entry;
 			entry.type = 1;
 			struct domentry* de = &entry.part.dom;
+			de->ad = NULL;
 			de->domain = strdup(args[0]);
 			de->data_len = 0;
 			de->data = NULL;
@@ -205,7 +206,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				if (desc == NULL) {
 					desc = xmalloc(slt + 2);
 				} else {
-					desc = xrealloc(desc, sltb + 2);
+					desc = xrealloc(desc, sltb + slt + 2);
 				}
 				memcpy(desc + sltb, args[i], slt);
 				sltb += slt;
@@ -261,6 +262,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				ag[0] = atoi(args[3]);
 				ag[1] = atoi(args[4]);
 				ag[2] = atoi(args[5]);
+				de->data = xmalloc(sizeof(uint16_t) * 3);
 				memcpy(de->data, ag, sizeof(uint16_t) * 3);
 				dt = 3;
 				da = 6;
@@ -324,13 +326,8 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 					continue;
 				}
 			} else if (dt == 3) {
-				size_t sl = strlen(args[da]) + 2;
-				if (de->data == NULL) {
-					de->data = xmalloc(sl);
-				} else {
-					de->data = xrealloc(de->data, de->data_len + sl);
-				}
-				writeDomain(args[da], de->data, sl + de->data_len, &de->data_len);
+				de->ad = xstrdup(args[da], 0);
+				//writeDomain(0, args[da], de->data, sl + de->data_len, &de->data_len);
 				//de->data_len += sl;
 			} else if (dt == 4) {
 				size_t sl = strlen(args[da]);

@@ -19,6 +19,7 @@ struct domentry {
 		int ttlmax;
 		size_t data_len;
 		void* data;
+		char* ad;
 		char* pdata;
 };
 
