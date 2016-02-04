@@ -259,9 +259,9 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				de->type = 33;
 				de->data_len = 6;
 				uint16_t ag[3];
-				ag[0] = atoi(args[3]);
-				ag[1] = atoi(args[4]);
-				ag[2] = atoi(args[5]);
+				ag[0] = htons(atoi(args[3]));
+				ag[1] = htons(atoi(args[4]));
+				ag[2] = htons(atoi(args[5]));
 				de->data = xmalloc(sizeof(uint16_t) * 3);
 				memcpy(de->data, ag, sizeof(uint16_t) * 3);
 				dt = 3;

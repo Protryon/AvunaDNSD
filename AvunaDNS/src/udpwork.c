@@ -389,7 +389,8 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		size_t al = strlen(dr->domain) + 2 + 10 + dr->rdlength;
 		size_t pal = dr->ad == NULL ? 0 : strlen(dr->ad) + 2;
 		resp = xrealloc(resp, cs + al + pal);
-		writeDomain(1, dr->domain, resp, cs + al + pal, &cs);
+		size_t pcs = cs;
+		writeDomain(1, dr->domain, resp, pcs + al + pal, &cs);
 		uint16_t t = htons(dr->type);
 		memcpy(resp + cs, &t, 2);
 		cs += 2;
@@ -399,12 +400,17 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		int32_t ttl = htonl(dr->ttl);
 		memcpy(resp + cs, &ttl, 4);
 		cs += 4;
-		if (dr->ad != NULL) writeDomain(1, dr->ad, resp, cs + al + pal, &cs);
-		t = htons(dr->rdlength);
-		memcpy(resp + cs, &t, 2);
+		size_t pcx = cs;
 		cs += 2;
-		memcpy(resp + cs, dr->rd, dr->rdlength);
 		cs += dr->rdlength;
+		size_t ocs = cs;
+		if (dr->ad != NULL) {
+			writeDomain(1, dr->ad, resp, pcx + al + pal, &cs);
+		}
+		t = htons(dr->rdlength + (cs - ocs));
+		memcpy(resp + pcx, &t, 2);
+		pcx += 2;
+		memcpy(resp + pcx, dr->rd, dr->rdlength);
 	}
 	if (addr != NULL && cs > 512) {
 		rhead = (struct dnsheader*) resp;
