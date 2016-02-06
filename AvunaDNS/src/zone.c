@@ -36,8 +36,13 @@ int domeq(const char* dom1, const char* dom2, int ext) {
 		m2 = strtok_r(m2 == NULL ? d2 : NULL, ".", &sp2);
 		if (streq(d1, "*")) goto cont;
 		if (streq(d1, "**")) {
-			if (m2 == NULL) break;
 			char* nd = d1 + strlen(d1) + 1;
+			if (m2 == NULL && strlen(nd) == 0) break;
+			else if (m2 == NULL) {
+				xfree(od1);
+				xfree(d2);
+				return 0;
+			}
 			if (strlen(nd) > 0 && (!streq(nd, "*") && !streq_nocase(nd, m2))) {
 				continue;
 			} else {
