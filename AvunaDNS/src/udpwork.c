@@ -50,6 +50,8 @@ struct dnsrecord {
 		struct dnsquestion* from;
 		char* pdata;
 		char* ad;
+		char* pd1;
+		char* pd2;
 };
 
 char* readDomain(unsigned char* data, size_t* doff, size_t len) {
@@ -151,6 +153,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 					dr->rdlength = ze->part.dom.data_len;
 					dr->rd = ze->part.dom.data;
 					dr->ad = ze->part.dom.ad;
+					dr->pd1 = ze->part.dom.pd1;
+					dr->pd2 = ze->part.dom.pd2;
 					(*rrecs)[(*rrecsl)++] = dr;
 				}
 			}
@@ -177,6 +181,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 						dr->rdlength = ze->part.dom.data_len;
 						dr->rd = ze->part.dom.data;
 						dr->ad = ze->part.dom.ad;
+						dr->pd1 = ze->part.dom.pd1;
+						dr->pd2 = ze->part.dom.pd2;
 						(*rrecs)[(*rrecsl)++] = dr;
 					}
 				} else {
@@ -203,6 +209,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							dr->rdlength = zed->part.dom.data_len;
 							dr->rd = zed->part.dom.data;
 							dr->ad = ze->part.dom.ad;
+							dr->pd1 = ze->part.dom.pd1;
+							dr->pd2 = ze->part.dom.pd2;
 							(*rrecs)[(*rrecsl)++] = dr;
 							x++;
 							if (x == zeel) x = 0;
@@ -229,6 +237,8 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 								dr->rdlength = ze->part.dom.data_len;
 								dr->rd = ze->part.dom.data;
 								dr->ad = ze->part.dom.ad;
+								dr->pd1 = ze->part.dom.pd1;
+								dr->pd2 = ze->part.dom.pd2;
 								(*rrecs)[(*rrecsl)++] = dr;
 								break;
 							}
@@ -388,6 +398,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		struct dnsrecord* dr = rrecs[i];
 		size_t al = strlen(dr->domain) + 2 + 10 + dr->rdlength;
 		size_t pal = dr->ad == NULL ? 0 : strlen(dr->ad) + 2;
+		if (dr->type == 6) pal += strlen(dr->pd1) + strlen(dr->pd2) + 4;
 		resp = xrealloc(resp, cs + al + pal);
 		size_t pcs = cs;
 		writeDomain(1, dr->domain, resp, pcs + al + pal, &cs);
@@ -402,15 +413,21 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		cs += 4;
 		size_t pcx = cs;
 		cs += 2;
+		size_t ocs2 = cs;
+		if (dr->type == 6) {
+			writeDomain(1, dr->pd1, resp, pcx + al + pal, &cs);
+			writeDomain(1, dr->pd2, resp, pcx + al + pal, &cs);
+		}
+		size_t dcs = cs - ocs2;
 		cs += dr->rdlength;
 		size_t ocs = cs;
 		if (dr->ad != NULL) {
 			writeDomain(1, dr->ad, resp, pcx + al + pal, &cs);
 		}
-		t = htons(dr->rdlength + (cs - ocs));
+		t = htons(dr->rdlength + (cs - ocs) + dcs);
 		memcpy(resp + pcx, &t, 2);
 		pcx += 2;
-		memcpy(resp + pcx, dr->rd, dr->rdlength);
+		memcpy(resp + pcx + dcs, dr->rd, dr->rdlength);
 	}
 	if (addr != NULL && cs > 512) {
 		rhead = (struct dnsheader*) resp;
@@ -463,13 +480,13 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 
 void run_udpwork(struct udpwork_param* param) {
 	unsigned char* mbuf = xmalloc(512); // udp has a maximum of 512
-	struct sockaddr addr; //TODO: ipv6?
-	socklen_t addrl = sizeof(struct sockaddr);
+	struct sockaddr_in6 addr;
+	socklen_t addrl = sizeof(struct sockaddr_in6);
 	while (1) {
 		int x = recvfrom(param->sfd, mbuf, 512, 0, (struct sockaddr*) &addr, &addrl);
 		if (x < 0) continue; // this shouldnt happen
 		if (x > 0) {
-			handleUDP(param->logsess, param->zone, param->sfd, mbuf, x, &addr, addrl, NULL);
+			handleUDP(param->logsess, param->zone, param->sfd, mbuf, x, (struct sockaddr*) &addr, addrl, NULL);
 		}
 	}
 	xfree(mbuf);

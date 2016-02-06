@@ -230,7 +230,25 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				de->type = 5;
 				dt = 3;
 			} else if (streq_nocase(args[1], "soa")) {
+				if (ai != 10) {
+					errlog(log, "line %s:%u: invalid SOA record, expected 10 arguments.", file, li);
+					continue;
+				}
 				de->type = 6;
+				de->pd1 = xstrdup(args[3], 0);
+				de->pd2 = xstrdup(args[4], 0);
+				de->data_len = 20;
+				de->data = xmalloc(20);
+				uint32_t t = htonl(atol(args[5]));
+				memcpy(de->data, &t, 4);
+				t = htonl(atoi(args[6]));
+				memcpy(de->data + 4, &t, 4);
+				t = htonl(atoi(args[7]));
+				memcpy(de->data + 8, &t, 4);
+				t = htonl(atoi(args[8]));
+				memcpy(de->data + 12, &t, 4);
+				t = htonl(atoi(args[9]));
+				memcpy(de->data + 16, &t, 4);
 			} else if (streq_nocase(args[1], "ptr")) {
 				de->type = 12;
 				dt = 3;

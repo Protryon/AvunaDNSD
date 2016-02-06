@@ -20,6 +20,8 @@ struct domentry {
 		size_t data_len;
 		void* data;
 		char* ad;
+		char* pd1;
+		char* pd2;
 		char* pdata;
 };
 
