@@ -245,7 +245,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 }
 
 void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t* cs) {
-	size_t sd = strlen(dom);
+	size_t sd = strlen(dom); // TODO: partial domain compression ie ruby.example.com compress to ruby.blah.
 	if (sd + 2 + *cs > ml) {
 		return;
 	}

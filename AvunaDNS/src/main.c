@@ -202,6 +202,10 @@ int main(int argc, char* argv[]) {
 			namespace = PF_LOCAL;
 		} else if (streq(bind_mode, "udp")) {
 			bind_ip = getConfigValue(serv, "bind-ip");
+			if (streq(bind_ip, "0.0.0.0")) {
+				ba = 1;
+			}
+			ip6 = ba || contains(bind_ip, ":");
 			const char* bind_port = getConfigValue(serv, "bind-port");
 			if (!strisunum(bind_port)) {
 				if (serv->id != NULL) errlog(delog, "Invalid bind-port for server: %s", serv->id);
@@ -209,7 +213,7 @@ int main(int argc, char* argv[]) {
 				continue;
 			}
 			port = atoi(bind_port);
-			namespace = PF_INET;
+			namespace = ip6 ? PF_INET6 : PF_INET;;
 			propo = SOCK_DGRAM;
 		} else {
 			if (serv->id != NULL) errlog(delog, "Invalid bind-mode for server: %s", serv->id);
