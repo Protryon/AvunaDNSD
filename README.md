@@ -1,2 +1,2 @@
-# Avuna-DNS
+# AvunaDNSD
 A DNS server forked from AvunaSkeleton.
