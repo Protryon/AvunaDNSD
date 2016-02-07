@@ -9,6 +9,6 @@
 #define VERSION_H_
 
 #define VERSION "2.0.0"
-#define DAEMON_NAME "DNS"
+#define DAEMON_NAME "DNSD"
 #define DEBUG
 #endif /* VERSION_H_ */
