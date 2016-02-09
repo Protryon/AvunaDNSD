@@ -70,6 +70,8 @@ char* readDomain(unsigned char* data, size_t* doff, size_t len) {
 			if (i + 1 < len) pt |= data[i + 1];
 			i = pt;
 			f = 1;
+		} else if ((x & 0x80) == 0x80 || (x & 0x40) == 0x40) {
+			return NULL;
 		}
 		if (i >= len || i < 0) break;
 		dom = xrealloc(dom, x + di + 2);
@@ -333,6 +335,9 @@ void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t*
 void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
 	if (len < 12) return;
 	struct dnsheader* head = buf;
+	if (head->QR == 1) return;
+	if (head->qdcount == 0) return;
+	if (htons(head->qdcount) * 5 > len - 12) return;
 	head->qdcount = (head->qdcount >> 8) | ((head->qdcount & 0xff) << 8);
 	head->ancount = (head->ancount >> 8) | ((head->ancount & 0xff) << 8);
 	head->nscount = (head->nscount >> 8) | ((head->nscount & 0xff) << 8);
@@ -342,6 +347,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 	size_t cp = 12;
 	for (int i = 0; i < head->qdcount; i++) {
 		qds[i].domain = readDomain(buf, &cp, len);
+		if (!qds[i].domain) return;
 		qds[i].logged = 0;
 		uint16_t* tt = buf + cp;
 		qds[i].type = htons(*tt);
@@ -349,6 +355,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		tt = buf + cp;
 		qds[i].class = htons(*tt);
 		cp += 2;
+		if (qds[i].class != 1) return; //TODO: perhaps return an error?
 	}
 //as a authoritative server only, we only need to see up to questions.
 	struct dnsheader* rhead = xmalloc(sizeof(struct dnsheader));
