@@ -20,7 +20,7 @@ struct udpwork_param {
 		struct zone* zone;
 };
 
-void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t* cs);
+void writeDomain(int compress, char* dom, unsigned char* buf, size_t dlx, size_t ml, size_t* cs);
 void run_udpwork(struct udpwork_param* param);
 void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn);
 

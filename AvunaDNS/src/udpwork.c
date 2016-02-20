@@ -256,7 +256,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 	}
 }
 
-void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t* cs) {
+void writeDomain(int compress, char* dom, unsigned char* buf, size_t dlx, size_t ml, size_t* cs) {
 	size_t sd = strlen(dom); // TODO: partial domain compression ie ruby.example.com compress to ruby.blah.
 	if (sd + 2 + *cs > ml) {
 		return;
@@ -265,7 +265,7 @@ void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t*
 		size_t dl = strlen(dom) + 1;
 		size_t mlx = 0;
 		size_t mi = 0;
-		for (size_t x = 1; x < (ml < 16384 ? ml : 16384); x++) {
+		for (size_t x = 1; x < (dlx < 16384 ? dlx : 16384); x++) {
 			if (buf[x] == dom[mlx] || dom[mlx] == '.') {
 				if (mi == 0) mi = x;
 				mlx++;
@@ -294,10 +294,10 @@ void writeDomain(int compress, char* dom, unsigned char* buf, size_t ml, size_t*
 		if (dom[i] == '.') {
 			//dom should be something like .com\0 or .example.com\0
 			if (compress) {
-				size_t dl = strlen(dom + i) + 1;
+				size_t dl = strlen(dom + i);
 				size_t mlx = 0;
 				size_t mi = 0;
-				for (size_t x = 1; x < (ml < 16384 ? ml : 16384); x++) {
+				for (size_t x = 1; x < (dlx < 16384 ? dlx : 16384); x++) {
 					if (buf[x] == dom[mlx + i] || dom[mlx + i] == '.') {
 						if (mi == 0) mi = x;
 						mlx++;
@@ -393,7 +393,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		struct dnsquestion* dq = &(qds[i]);
 		size_t al = strlen(dq->domain) + 2 + 4;
 		resp = xrealloc(resp, cs + al);
-		writeDomain(1, dq->domain, resp, cs + al, &cs);
+		writeDomain(1, dq->domain, resp, cs, cs + al, &cs);
 		uint16_t tt = htons(dq->type);
 		memcpy(resp + cs, &tt, 2);
 		cs += 2;
@@ -408,7 +408,7 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		if (dr->type == 6) pal += strlen(dr->pd1) + strlen(dr->pd2) + 4;
 		resp = xrealloc(resp, cs + al + pal);
 		size_t pcs = cs;
-		writeDomain(1, dr->domain, resp, pcs + al + pal, &cs);
+		writeDomain(1, dr->domain, resp, pcs, pcs + al + pal, &cs);
 		uint16_t t = htons(dr->type);
 		memcpy(resp + cs, &t, 2);
 		cs += 2;
@@ -422,14 +422,14 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		cs += 2;
 		size_t ocs2 = cs;
 		if (dr->type == 6) {
-			writeDomain(1, dr->pd1, resp, pcx + al + pal, &cs);
-			writeDomain(1, dr->pd2, resp, pcx + al + pal, &cs);
+			writeDomain(1, dr->pd1, resp, pcx, pcx + al + pal, &cs);
+			writeDomain(1, dr->pd2, resp, pcx, pcx + al + pal, &cs);
 		}
 		size_t dcs = cs - ocs2;
 		cs += dr->rdlength;
 		size_t ocs = cs;
 		if (dr->ad != NULL) {
-			writeDomain(1, dr->ad, resp, pcx + al + pal, &cs);
+			writeDomain(1, dr->ad, resp, pcx, pcx + al + pal, &cs);
 		}
 		t = htons(dr->rdlength + (cs - ocs) + dcs);
 		memcpy(resp + pcx, &t, 2);

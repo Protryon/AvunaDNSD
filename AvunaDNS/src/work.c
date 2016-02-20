@@ -22,6 +22,7 @@
 #include <stdint.h>
 
 void closeConn(struct work_param* param, struct conn* conn) {
+	if (conn == NULL) return;
 	close(conn->fd);
 	if (rem_collection(param->conns, conn)) {
 		errlog(param->logsess, "Failed to delete connection properly! This is bad!");
@@ -64,7 +65,7 @@ void run_work(struct work_param* param) {
 				fds[fdi].events = POLLIN | (conn->writeBuffer_size > 0);
 				fds[fdi++].revents = 0;
 				if (fdi == cc) break;
-			}
+			} else conns[fdi] = NULL;
 		}
 		pthread_rwlock_unlock(&param->conns->data_mutex);
 		fds[cc].fd = param->pipes[0];
@@ -81,17 +82,20 @@ void run_work(struct work_param* param) {
 		for (int i = 0; i < cc; i++) {
 			int re = fds[i].revents;
 			struct conn* conn = conns[i];
+			if (conn == NULL) continue;
 			if ((re & POLLERR) == POLLERR) {
 				//printf("POLLERR in worker poll! This is bad!\n");
 				goto cont;
 			}
 			if ((re & POLLHUP) == POLLHUP) {
 				closeConn(param, conn);
+				conn = NULL;
 				goto cont;
 			}
 			if ((re & POLLNVAL) == POLLNVAL) {
 				printf("Invalid FD in worker poll! This is bad!\n");
 				closeConn(param, conn);
+				conn = NULL;
 				goto cont;
 			}
 			if ((re & POLLIN) == POLLIN) {
@@ -153,6 +157,7 @@ void run_work(struct work_param* param) {
 				}
 				if (conn->writeBuffer_size == 0 && conn->state == 1) {
 					closeConn(param, conn);
+					conn = NULL;
 					goto cont;
 				}
 			}
