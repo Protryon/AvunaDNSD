@@ -114,13 +114,14 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 		(*rrecs)[0] = dr;
 		return;
 	}
+	int dcab = -1;
 	for (size_t i = 0; i < zone->entry_count; i++) {
 		struct zoneentry* ze = zone->entries[i];
 		if (ze->type == 0 && domeq(ze->part.subzone->domain, dq->domain, (*rrecsl) == 0) && rs < 0) {
 			parseZone(dq, ze->part.subzone, rrecs, rrecsl);
 		} else if (ze->type == 1 && (ze->part.dom.type == dq->type || ze->part.dom.pt)) {
-			int ext = 1;
-			if (startsWith(ze->part.dom.domain, "~")) {
+			int ext = dcab != ze->part.dom.type;
+			if (ext) if (startsWith(ze->part.dom.domain, "~")) {
 				for (size_t x = 0; x < *rrecsl; x++) {
 					struct dnsrecord* dr = (*rrecs)[x];
 					if (dr->type == dq->type) {
@@ -130,6 +131,10 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 				}
 			}
 			if (domeq(ze->part.dom.domain, dq->domain, ext)) {
+				if (ze->part.dom.data_len == 0) {
+					dcab = ze->part.dom.type;
+					continue;
+				}
 				if (rs >= 0) {
 					if (zee == NULL) {
 						zee = xmalloc(sizeof(struct zoneentry*));

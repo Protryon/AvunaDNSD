@@ -16,6 +16,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include "udpwork.h"
+#include <stdio.h>
 
 int domeq(const char* dom1, const char* dom2, int ext) {
 	if (streq(dom1, "@")) return 1;
@@ -179,8 +180,8 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			entry.type = 3;
 			addZoneEntry(zone, &entry);
 		} else {
-			if (ai < 4) {
-				errlog(log, "line %s:%u: invalid domain record, expected at least 4 arguments.", file, li);
+			if (ai < 3) {
+				errlog(log, "line %s:%u: invalid domain record, expected at least 3 arguments.", file, li);
 				continue;
 			}
 			struct zoneentry entry;
@@ -206,7 +207,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			de->pt = 0;
 			char* desc = NULL;
 			size_t sltb = 0;
-			for (int i = 3; i < ai; i++) {
+			if (ai > 3) for (int i = 3; i < ai; i++) {
 				size_t slt = strlen(args[i]);
 				if (desc == NULL) {
 					desc = xmalloc(slt + 2);
@@ -235,6 +236,11 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				de->type = 5;
 				dt = 3;
 			} else if (streq_nocase(args[1], "soa")) {
+				if (ai == 3) {
+					de->data_len = 0;
+					de->data = NULL;
+					goto eg;
+				}
 				if (ai != 10) {
 					errlog(log, "line %s:%u: invalid SOA record, expected 10 arguments.", file, li);
 					continue;
@@ -258,6 +264,11 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				de->type = 12;
 				dt = 3;
 			} else if (streq_nocase(args[1], "mx")) {
+				if (ai == 3) {
+					de->data_len = 0;
+					de->data = NULL;
+					goto eg;
+				}
 				if (ai != 5) {
 					errlog(log, "line %s:%u: invalid MX record, expected 5 arguments.", file, li);
 					continue;
@@ -279,6 +290,11 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				de->type = 28;
 				dt = 2;
 			} else if (streq_nocase(args[1], "srv")) {
+				if (ai == 3) {
+					de->data_len = 0;
+					de->data = NULL;
+					goto eg;
+				}
 				de->type = 33;
 				de->data_len = 6;
 				uint16_t ag[3];
@@ -319,6 +335,12 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			} else {
 				errlog(log, "line %s:%u: invalid domain record, invalid type.", file, li);
 				continue;
+			}
+			eg: ;
+			if (ai == 3) {
+				de->data_len = 0;
+				de->data = NULL;
+				goto az;
 			}
 			if (dt == 1) {
 				struct in_addr ia;
@@ -362,11 +384,11 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				memcpy(de->data + de->data_len, args[da], sl);
 				de->data_len += sl;
 			}
+			az: ;
 			addZoneEntry(zone, &entry);
 		}
 	}
 	close(fd);
-	//if (ret < 0) return -1;
 	return 0;
 }
 
