@@ -208,16 +208,16 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							}
 							struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 							dr->from = dq;
-							dr->pdata = ze->part.dom.pdata;
+							dr->pdata = zed->part.dom.pdata;
 							dr->domain = dq->domain;
 							dr->type = zed->part.dom.type;
 							dr->class = 1;
-							dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
+							dr->ttl = zed->part.dom.ttlmin + (zed->part.dom.ttlmax == zed->part.dom.ttlmin ? 0 : (rand() % (zed->part.dom.ttlmax - zed->part.dom.ttlmin)));
 							dr->rdlength = zed->part.dom.data_len;
 							dr->rd = zed->part.dom.data;
-							dr->ad = ze->part.dom.ad;
-							dr->pd1 = ze->part.dom.pd1;
-							dr->pd2 = ze->part.dom.pd2;
+							dr->ad = zed->part.dom.ad;
+							dr->pd1 = zed->part.dom.pd1;
+							dr->pd2 = zed->part.dom.pd2;
 							(*rrecs)[(*rrecsl)++] = dr;
 							x++;
 							if (x == zeel) x = 0;
