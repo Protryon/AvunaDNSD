@@ -337,7 +337,17 @@ int main(int argc, char* argv[]) {
 		slog->error_fd = lel == NULL ? NULL : fopen(lel, "a");
 		const char* zone = getConfigValue(serv, "master-zone");
 		int zfd = -1;
-		if (zone == NULL || (zfd = open(zone, O_CREAT | O_RDONLY, 0664)) < 0) {
+		int msql = 0;
+		if (streq_nocase(zone, "mysql")) {
+#ifndef SUPPORTS_MYSQL
+			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s (mysql not supported by build)", serv->id);
+			else errlog(delog, "Invalid master-zone for server (mysql not supported by build)");
+			close (sfd);
+			continue;
+#endif
+			zone = NULL;
+			msql = 1;
+		} else if (zone == NULL || (zfd = open(zone, O_CREAT | O_RDONLY, 0664)) < 0) {
 			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s", serv->id);
 			else errlog(delog, "Invalid master-zone for server");
 			close (sfd);
