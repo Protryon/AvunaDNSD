@@ -260,9 +260,7 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 		}
 	}
 	if (*rrecsl == 0) {
-		if (type == 28) {
-			parseZone(dq, 1, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
-		} else if (type == 1) {
+		if (type == 1) {
 			parseZone(dq, 5, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
 		}
 	}
