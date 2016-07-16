@@ -54,4 +54,6 @@ int addZoneEntry(struct zone* zone, struct zoneentry* entry);
 
 int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log);
 
+void freeZone(struct zone* zone);
+
 #endif /* ZONE_H_ */

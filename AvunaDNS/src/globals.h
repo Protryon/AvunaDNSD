@@ -8,8 +8,9 @@
 #ifndef GLOBALS_H_
 #define GLOBALS_H_
 
-//#define SUPPORTS_MYSQL
+#define SUPPORTS_MYSQL
 
 struct config* cfg;
 struct logsess* delog;
+
 #endif /* GLOBALS_H_ */

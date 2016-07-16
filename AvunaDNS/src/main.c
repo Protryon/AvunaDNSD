@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include "zone.h"
 #include "udpwork.h"
+#include "mysql_parser.h"
 
 struct udp_accept_param { // ;)
 		int works_count;
@@ -46,6 +47,7 @@ struct udptcp_accept_param {
 };
 
 int main(int argc, char* argv[]) {
+	signal(SIGPIPE, SIG_IGN);
 	if (getuid() != 0 || getgid() != 0) {
 		printf("Must run as root!\n");
 		return 1;
@@ -337,7 +339,13 @@ int main(int argc, char* argv[]) {
 		slog->error_fd = lel == NULL ? NULL : fopen(lel, "a");
 		const char* zone = getConfigValue(serv, "master-zone");
 		int zfd = -1;
-		int msql = 0;
+		int mysql = 0;
+		char* mysql_host = NULL;
+		int mysql_port = 0;
+		char* mysql_user = NULL;
+		char* mysql_pass = NULL;
+		char* mysql_schema = NULL;
+		int mysql_refresh = 60;
 		if (streq_nocase(zone, "mysql")) {
 #ifndef SUPPORTS_MYSQL
 			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s (mysql not supported by build)", serv->id);
@@ -346,7 +354,39 @@ int main(int argc, char* argv[]) {
 			continue;
 #endif
 			zone = NULL;
-			msql = 1;
+			mysql = 1;
+			mysql_host = getConfigValue(serv, "mysql-host");
+			if (mysql_host == NULL) {
+				if (serv->id != NULL) errlog(delog, "Invalid mysql-host for server: %s, assuming localhost", serv->id);
+				else errlog(delog, "Invalid mysql-host for server, assuming localhost\n");
+				mysql_host = "localhost";
+			}
+			const char* mp = getConfigValue(serv, "mysql-port");
+			if (mp == NULL) {
+				if (serv->id != NULL) errlog(delog, "Invalid mysql-port for server: %s, assuming 3306", serv->id);
+				else errlog(delog, "Invalid mysql-port for server, assuming 3306\n");
+				mp = "3306";
+			}
+			mysql_port = atol(mp);
+			mp = getConfigValue(serv, "mysql-refresh");
+			if (mp == NULL) {
+				if (serv->id != NULL) errlog(delog, "Invalid mysql-refresh for server: %s, assuming 60 seconds", serv->id);
+				else errlog(delog, "Invalid mysql-refresh for server, assuming 60 seconds\n");
+			} else mysql_refresh = atol(mp);
+			mysql_user = getConfigValue(serv, "mysql-user");
+			if (mysql_user == NULL) {
+				if (serv->id != NULL) errlog(delog, "Invalid mysql-user for server: %s", serv->id);
+				else errlog(delog, "Invalid mysql-user for server\n");
+				close(sfd);
+				continue;
+			}
+			mysql_pass = getConfigValue(serv, "mysql-pass");
+			mysql_schema = getConfigValue(serv, "mysql-schema");
+			if (mysql_schema == NULL) {
+				if (serv->id != NULL) errlog(delog, "Invalid mysql-schema for server: %s, assuming dns", serv->id);
+				else errlog(delog, "Invalid mysql-schema for server, assuming dns\n");
+				mysql_schema = "dns";
+			}
 		} else if (zone == NULL || (zfd = open(zone, O_CREAT | O_RDONLY, 0664)) < 0) {
 			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s", serv->id);
 			else errlog(delog, "Invalid master-zone for server");
@@ -354,13 +394,15 @@ int main(int argc, char* argv[]) {
 			continue;
 		}
 		close(zfd);
-		struct zone* zonep = xmalloc(sizeof(struct zone));
-		zonep->domain = "@";
-		if (readZone(zonep, zone, "/etc/avuna/dns/", slog) < 0) {
-			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s, %s", serv->id, strerror(errno));
-			else errlog(delog, "Invalid master-zone for server: %s", strerror(errno));
-			close (sfd);
-			continue;
+		struct zone* zonep = zone == NULL ? NULL : xmalloc(sizeof(struct zone));
+		if (zone != NULL) {
+			zonep->domain = "@";
+			if (readZone(zonep, zone, "/etc/avuna/dns/", slog) < 0) {
+				if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s, %s", serv->id, strerror(errno));
+				else errlog(delog, "Invalid master-zone for server: %s", strerror(errno));
+				close (sfd);
+				continue;
+			}
 		}
 		if (propo == SOCK_STREAM) {
 			struct accept_param* ap = xmalloc(sizeof(struct accept_param));
@@ -389,6 +431,25 @@ int main(int argc, char* argv[]) {
 			pt.param.udp = uap;
 			aps[i] = pt;
 		}
+		struct mysql_data* mysql_data = xmalloc(sizeof(struct mysql_data));
+		mysql_data->mysql = mysql;
+		mysql_data->mysql_host = mysql_host;
+		mysql_data->mysql_port = mysql_port;
+		mysql_data->mysql_user = mysql_user;
+		mysql_data->mysql_pass = mysql_pass;
+		mysql_data->mysql_schema = mysql_schema;
+		mysql_data->czone = NULL;
+		mysql_data->mysql_refresh = mysql_refresh;
+		mysql_data->complete = 0;
+		mysql_data->szone = NULL;
+		if (mysql) {
+			pthread_t ptx;
+			int pc = pthread_create(&ptx, NULL, mysql_thread, mysql_data);
+			if (pc) {
+				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update @ %s server.", pc, servs[i]->id);
+				else errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update.", pc);
+			}
+		}
 		for (int x = 0; x < tc; x++) {
 			if (propo == SOCK_STREAM) {
 				struct work_param* wp = xmalloc(sizeof(struct work_param));
@@ -397,6 +458,7 @@ int main(int argc, char* argv[]) {
 				wp->i = x;
 				wp->sport = port;
 				wp->zone = zonep;
+				wp->mysql = mysql_data;
 				aps[i].param.accept->works[x] = wp;
 			} else {
 				struct udpwork_param* uwp = xmalloc(sizeof(struct udpwork_param));
@@ -404,6 +466,7 @@ int main(int argc, char* argv[]) {
 				uwp->i = x;
 				uwp->sfd = sfd;
 				uwp->zone = zonep;
+				uwp->mysql = mysql_data;
 				aps[i].param.udp.works[x] = uwp;
 			}
 		}

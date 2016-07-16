@@ -89,11 +89,11 @@ char* readDomain(unsigned char* data, size_t* doff, size_t len) {
 
 char* dver = NULL;
 
-void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rrecs, size_t* rrecsl) {
+void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone* zone, struct dnsrecord*** rrecs, size_t* rrecsl, struct dnsrecord*** arrecs, size_t* arrecsl) {
 	int rs = -1;
 	struct zoneentry** zee = NULL;
 	size_t zeel = 0;
-	if (streq_nocase(dq->domain, "version.bind") && dq->type == 16) {
+	if (streq_nocase(domain, "version.bind") && type == 16) {
 		*rrecs = xmalloc(sizeof(struct dnsrecord*));
 		*rrecsl = 1;
 		if (dver == NULL) {
@@ -103,7 +103,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 		}
 		struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 		dr->class = 1;
-		dr->domain = dq->domain;
+		dr->domain = domain;
 		dr->from = dq;
 		dr->ad = NULL;
 		dr->rd = (unsigned char*) dver;
@@ -117,21 +117,21 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 	int dcab = -1;
 	for (size_t i = 0; i < zone->entry_count; i++) {
 		struct zoneentry* ze = zone->entries[i];
-		if (ze->type == 0 && domeq(ze->part.subzone->domain, dq->domain, (*rrecsl) == 0) && rs < 0) {
-			parseZone(dq, ze->part.subzone, rrecs, rrecsl);
-		} else if (ze->type == 1 && (ze->part.dom.type == dq->type || ze->part.dom.pt)) {
+		if (ze->type == 0 && domeq(ze->part.subzone->domain, domain, (*rrecsl) == 0) && rs < 0) {
+			parseZone(dq, dq->type, dq->domain, ze->part.subzone, rrecs, rrecsl, arrecs, arrecsl);
+		} else if (ze->type == 1 && (ze->part.dom.type == type || ze->part.dom.pt)) {
 			int ext = dcab != ze->part.dom.type;
 			if (ext) if (startsWith(ze->part.dom.domain, "~")) {
 				for (size_t x = 0; x < *rrecsl; x++) {
 					struct dnsrecord* dr = (*rrecs)[x];
-					if (dr->type == dq->type) {
+					if (dr->type == type) {
 						ext = 0;
 						break;
 					}
 				}
 			}
-			if (domeq(ze->part.dom.domain, dq->domain, ext)) {
-				if (ze->part.dom.data_len == 0) {
+			if (domeq(ze->part.dom.domain, domain, ext)) {
+				if (ze->part.dom.data_len == 0 && ze->part.dom.ad == NULL) {
 					dcab = ze->part.dom.type;
 					continue;
 				}
@@ -153,7 +153,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 					struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 					dr->from = dq;
 					dr->pdata = ze->part.dom.pdata;
-					dr->domain = dq->domain;
+					dr->domain = domain;
 					dr->type = ze->part.dom.type;
 					dr->class = 1;
 					dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
@@ -181,7 +181,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 						struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 						dr->from = dq;
 						dr->pdata = ze->part.dom.pdata;
-						dr->domain = dq->domain;
+						dr->domain = domain;
 						dr->type = ze->part.dom.type;
 						dr->class = 1;
 						dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
@@ -209,7 +209,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 							struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 							dr->from = dq;
 							dr->pdata = zed->part.dom.pdata;
-							dr->domain = dq->domain;
+							dr->domain = domain;
 							dr->type = zed->part.dom.type;
 							dr->class = 1;
 							dr->ttl = zed->part.dom.ttlmin + (zed->part.dom.ttlmax == zed->part.dom.ttlmin ? 0 : (rand() % (zed->part.dom.ttlmax - zed->part.dom.ttlmin)));
@@ -237,7 +237,7 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 								struct dnsrecord* dr = xmalloc(sizeof(struct dnsrecord));
 								dr->from = dq;
 								dr->pdata = ze->part.dom.pdata;
-								dr->domain = dq->domain;
+								dr->domain = domain;
 								dr->type = ze->part.dom.type;
 								dr->class = 1;
 								dr->ttl = ze->part.dom.ttlmin + (ze->part.dom.ttlmax == ze->part.dom.ttlmin ? 0 : (rand() % (ze->part.dom.ttlmax - ze->part.dom.ttlmin)));
@@ -257,6 +257,20 @@ void parseZone(struct dnsquestion* dq, struct zone* zone, struct dnsrecord*** rr
 			zee = NULL;
 			zeel = 0;
 			rs = -1;
+		}
+	}
+	if (*rrecsl == 0) {
+		if (type == 28) {
+			parseZone(dq, 1, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
+		} else if (type == 1) {
+			parseZone(dq, 5, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
+		}
+	}
+	if (type == 5 && arrecs != rrecs) {
+		for (size_t i = 0; i < *rrecsl; i++) {
+			if ((*rrecs)[i]->type == 5) {
+				parseZone(dq, 1, (*rrecs)[i]->pdata, zone, arrecs, arrecsl, arrecs, arrecsl);
+			}
 		}
 	}
 }
@@ -337,7 +351,9 @@ void writeDomain(int compress, char* dom, unsigned char* buf, size_t dlx, size_t
 	buf[(*cs)++] = 0;
 }
 
-void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
+void handleUDP(struct mysql_data* mysql, struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
+	if (mysql != NULL) zone = mysql->szone;
+	if (zone == NULL) return;
 	if (len < 12) return;
 	struct dnsheader* head = buf;
 	if (head->QR == 1) return;
@@ -379,14 +395,17 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 	rhead->arcount = 0;
 	struct dnsrecord** rrecs = NULL;
 	size_t rrecsl = 0;
+	struct dnsrecord** arrecs = NULL;
+	size_t arrecsl = 0;
 	if (head->opcode != 0) {
 		rhead->rcode = 4;
 		goto wr;
 	}
 	for (int x = 0; x < head->qdcount; x++) {
-		parseZone(&qds[x], zone, &rrecs, &rrecsl);
+		parseZone(&qds[x], qds[x].type, qds[x].domain, zone, &rrecs, &rrecsl, &arrecs, &arrecsl);
 	}
 	rhead->ancount = rrecsl;
+	rhead->arcount = arrecsl;
 	wr: ;
 	rhead->qdcount = htons(rhead->qdcount);
 	rhead->ancount = htons(rhead->ancount);
@@ -406,8 +425,8 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 		memcpy(resp + cs, &tt, 2);
 		cs += 2;
 	}
-	for (int i = 0; i < rrecsl; i++) {
-		struct dnsrecord* dr = rrecs[i];
+	for (int i = 0; i < rrecsl + arrecsl; i++) {
+		struct dnsrecord* dr = i < rrecsl ? rrecs[i] : arrecs[i - rrecsl];
 		size_t al = strlen(dr->domain) + 2 + 10 + dr->rdlength;
 		size_t pal = dr->ad == NULL ? 0 : strlen(dr->ad) + 2;
 		if (dr->type == 6) pal += strlen(dr->pd1) + strlen(dr->pd2) + 4;
@@ -477,11 +496,18 @@ void handleUDP(struct logsess* log, struct zone* zone, int sfd, void* buf, size_
 	}
 	for (int i = 0; i < rrecsl; i++) {
 		struct dnsrecord* dr = rrecs[i];
-		acclog(log, "%s requested %s for %s, returned %s %s", mip, typeString(rrecs[i]->from->type), rrecs[i]->from->domain, typeString(rrecs[i]->type), rrecs[i]->pdata);
-		rrecs[i]->from->logged = 1;
+		acclog(log, "%s requested %s for %s, returned %s %s", mip, typeString(dr->from->type), dr->from->domain, typeString(dr->type), dr->pdata);
+		dr->from->logged = 1;
+		xfree(dr);
+	}
+	for (int i = 0; i < arrecsl; i++) {
+		struct dnsrecord* dr = arrecs[i];
+		acclog(log, "%s requested %s for %s, returned<assume> %s %s", mip, typeString(dr->from->type), dr->from->domain, typeString(dr->type), dr->pdata);
+		dr->from->logged = 1;
 		xfree(dr);
 	}
 	if (rrecs != NULL) xfree(rrecs);
+	if (rrecs != NULL) xfree(arrecs);
 	for (int x = 0; x < head->qdcount; x++) {
 		if (!qds[x].logged) {
 			acclog(log, "%s requested %s for %s, returned nothing", mip, typeString(qds[x].type), qds[x].domain);
@@ -496,9 +522,15 @@ void run_udpwork(struct udpwork_param* param) {
 	socklen_t addrl = sizeof(struct sockaddr_in6);
 	while (1) {
 		int x = recvfrom(param->sfd, mbuf, 512, 0, (struct sockaddr*) &addr, &addrl);
+		if (param->mysql->mysql && param->mysql->complete && param->zone != param->mysql->czone) {
+			if (param->zone != NULL) {
+				freeZone(param->zone);
+			}
+			param->zone = param->mysql->czone;
+		}
 		if (x < 0) continue; // this shouldnt happen
 		if (x > 0) {
-			handleUDP(param->logsess, param->zone, param->sfd, mbuf, x, (struct sockaddr*) &addr, addrl, NULL);
+			handleUDP(param->mysql, param->logsess, param->zone, param->sfd, mbuf, x, (struct sockaddr*) &addr, addrl, NULL);
 		}
 	}
 	xfree(mbuf);

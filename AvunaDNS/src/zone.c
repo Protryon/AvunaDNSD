@@ -134,6 +134,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				if (i > 0 && rl[i - 1] == '"') rl[i - 1] = 0;
 				args[ai++] = rl + i + 1;
 			}
+			if (ai > 510) break;
 		}
 		args[ai] = NULL;
 		if (streq_nocase(args[0], "$zone")) {
@@ -193,14 +194,14 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			de->data = NULL;
 			char* dj = strchr(args[2], '-');
 			if (dj == NULL) {
-				int k = atoi(args[2]);
+				int k = atol(args[2]);
 				de->ttlmin = k;
 				de->ttlmax = k;
 			} else {
 				dj[0] = 0;
 				dj++;
-				de->ttlmin = atoi(args[2]);
-				de->ttlmax = atoi(dj);
+				de->ttlmin = atol(args[2]);
+				de->ttlmax = atol(dj);
 			}
 			int dt = 0; // 0 for none, 1 for ip4, 2 for ip6, 3 for domain, 4 for text
 			int da = 3;
@@ -274,7 +275,7 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 					continue;
 				}
 				de->type = 15;
-				uint16_t pref = atoi(args[4]);
+				uint16_t pref = atoi(args[3]);
 				de->data = xmalloc(sizeof(uint16_t));
 				memcpy(de->data, &pref, sizeof(uint16_t));
 				de->data_len = sizeof(uint16_t);
@@ -305,33 +306,9 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				memcpy(de->data, ag, sizeof(uint16_t) * 3);
 				dt = 3;
 				da = 6;
-			} else if (streq_nocase(args[1], "cert")) {
-				de->type = 37;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
 			} else if (streq_nocase(args[1], "dname")) {
 				de->type = 39;
 				dt = 3;
-			} else if (streq_nocase(args[1], "sshfp")) {
-				de->type = 44;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
-			} else if (streq_nocase(args[1], "ipseckey")) {
-				de->type = 45;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
-			} else if (streq_nocase(args[1], "dhcid")) {
-				de->type = 49;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
-			} else if (streq_nocase(args[1], "tlsa")) {
-				de->type = 52;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
-			} else if (streq_nocase(args[1], "caa")) {
-				de->type = 257;
-				errlog(log, "line %s:%u: invalid %s record, not yet implemented.", file, li, args[1]);
-				continue;
 			} else {
 				errlog(log, "line %s:%u: invalid domain record, invalid type.", file, li);
 				continue;
@@ -390,5 +367,21 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 	}
 	close(fd);
 	return 0;
+}
+
+void freeZone(struct zone* zone) {
+	if (zone->domain != NULL) xfree(zone->domain);
+	for (size_t i = 0; i < zone->entry_count; i++) {
+		struct zoneentry* ze = zone->entries[i];
+		if (ze->type == 0) freeZone(ze->part.subzone);
+		else if (ze->type == 1) {
+			if (ze->part.dom.domain != NULL) xfree(ze->part.dom.domain);
+			if (ze->part.dom.ad != NULL) xfree(ze->part.dom.ad);
+			if (ze->part.dom.data != NULL) xfree(ze->part.dom.data);
+			if (ze->part.dom.pd1 != NULL) xfree(ze->part.dom.pd1);
+			if (ze->part.dom.pd2 != NULL) xfree(ze->part.dom.pd2);
+			if (ze->part.dom.pdata != NULL) xfree(ze->part.dom.pdata);
+		}
+	}
 }
 

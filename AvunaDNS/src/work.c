@@ -38,7 +38,7 @@ int handleRead(struct conn* conn, struct work_param* param, int fd) {
 		uint16_t rl = htons(*len);
 		if (conn->readBuffer_size >= 2 + rl) {
 			conn->state = 1;
-			handleUDP(param->logsess, param->zone, -1, conn->readBuffer + 2, rl, NULL, 0, conn);
+			handleUDP(param->mysql, param->logsess, param->zone, -1, conn->readBuffer + 2, rl, NULL, 0, conn);
 		}
 	}
 	return 0;
@@ -72,6 +72,12 @@ void run_work(struct work_param* param) {
 		fds[cc].events = POLLIN;
 		fds[cc].revents = 0;
 		int cp = poll(fds, cc + 1, -1);
+		if (param->mysql->mysql && param->mysql->complete && param->zone != param->mysql->czone) {
+			if (param->zone != NULL) {
+				freeZone(param->zone);
+			}
+			param->zone = param->mysql->czone;
+		}
 		if (cp < 0) {
 			printf("Poll error in worker thread! %s\n", strerror(errno));
 		} else if (cp == 0) continue;

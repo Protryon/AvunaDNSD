@@ -11,6 +11,7 @@
 #include "collection.h"
 #include "accept.h"
 #include "log.h"
+#include "udpwork.h"
 
 struct work_param {
 		struct collection* conns;
@@ -19,6 +20,7 @@ struct work_param {
 		int i;
 		int sport;
 		struct zone* zone;
+		struct mysql_data* mysql;
 };
 
 void run_work(struct work_param* param);
