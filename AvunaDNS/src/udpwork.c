@@ -266,10 +266,20 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 			parseZone(dq, 5, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
 		}
 	}
-	if (type == 5 && arrecs != rrecs) {
-		for (size_t i = 0; i < *rrecsl; i++) {
-			if ((*rrecs)[i]->type == 5) {
-				parseZone(dq, 1, (*rrecs)[i]->pdata, zone, arrecs, arrecsl, arrecs, arrecsl);
+	if (arrecs != rrecs) {
+		if (type == 5) {
+			for (size_t i = 0; i < *rrecsl; i++) {
+				if ((*rrecs)[i]->type == 5) {
+					parseZone(dq, 1, (*rrecs)[i]->pdata, zone, arrecs, arrecsl, arrecs, arrecsl);
+				}
+			}
+		} else if (type == 15) {
+			for (size_t i = 0; i < *rrecsl; i++) {
+				if ((*rrecs)[i]->type == 15) {
+					char* dom = (*rrecs)[i]->pdata;
+					dom = strchr(dom, ' ');
+					if (dom != NULL && strlen(dom) > 2) parseZone(dq, 1, dom + 1, zone, arrecs, arrecsl, arrecs, arrecsl);
+				}
 			}
 		}
 	}
