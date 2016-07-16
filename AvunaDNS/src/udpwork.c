@@ -362,7 +362,7 @@ void writeDomain(int compress, char* dom, unsigned char* buf, size_t dlx, size_t
 }
 
 void handleUDP(struct mysql_data* mysql, struct logsess* log, struct zone* zone, int sfd, void* buf, size_t len, struct sockaddr* addr, socklen_t addrl, struct conn* conn) {
-	if (mysql != NULL) zone = mysql->szone;
+	if (mysql != NULL && mysql->szone != NULL) zone = mysql->szone;
 	if (zone == NULL) return;
 	if (len < 12) return;
 	struct dnsheader* head = buf;

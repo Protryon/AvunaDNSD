@@ -393,7 +393,7 @@ int main(int argc, char* argv[]) {
 			close (sfd);
 			continue;
 		}
-		close(zfd);
+		if (zfd >= 0) close(zfd);
 		struct zone* zonep = zone == NULL ? NULL : xmalloc(sizeof(struct zone));
 		if (zone != NULL) {
 			zonep->domain = "@";

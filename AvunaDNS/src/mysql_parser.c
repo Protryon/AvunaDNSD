@@ -4,6 +4,8 @@
  *  Created on: Jun 19, 2016
  *      Author: root
  */
+#include "globals.h"
+#ifdef SUPPORTS_MYSQL
 
 #include "mysql_parser.h"
 #include "udpwork.h"
@@ -196,7 +198,7 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 			} else {
 				continue;
 			}
-			eg2: ;
+			eg2:;
 			if (ai == 0) {
 				de->data_len = 0;
 				de->data = NULL;
@@ -242,7 +244,7 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 				memcpy(de->data + de->data_len, args[da], sl);
 				de->data_len += sl;
 			}
-			az2: ;
+			az2:;
 			xfree(ogd);
 		}
 		ru++;
@@ -293,8 +295,10 @@ void mysql_thread(struct mysql_data* data) {
 		data->szone = data->czone;
 		data->czone = NULL;
 		if (tzone != NULL) freeZone(tzone);
-		mcnt: ;
+		mcnt:;
 		mysql_close(db_conn);
 		sleep(data->mysql_refresh);
 	}
 }
+
+#endif
