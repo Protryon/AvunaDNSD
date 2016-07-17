@@ -223,10 +223,10 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 			if (desc != NULL) desc[sltb - 1] = 0;
 			else desc = "";
 			de->pdata = desc;
-			if (startsWith(args[1], "~")) {
-				de->pt = 1;
-				args[1]++;
-			}
+			//if (startsWith(args[1], "~")) {
+			//	de->pt = 1;
+			//	args[1]++;
+			//}
 			if (streq_nocase(args[1], "a")) {
 				de->type = 1;
 				dt = 1;
