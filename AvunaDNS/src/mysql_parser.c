@@ -98,6 +98,7 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 			de->pd1 = NULL;
 			de->pd2 = NULL;
 			de->pdata = NULL;
+			de->pt = 0;
 			char* tdj = xstrdup(row[6], 0);
 			char* dj = strchr(tdj, '-');
 			if (dj == NULL) {
@@ -113,7 +114,6 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 			xfree(tdj);
 			int dt = 0; // 0 for none, 1 for ip4, 2 for ip6, 3 for domain, 4 for text
 			int da = 0;
-			de->pt = 0;
 			size_t sltb = 0;
 			de->pdata = xstrdup(row[7], 0);
 			char* tt = row[5];
@@ -249,6 +249,15 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 		}
 		ru++;
 		lrrc = rrc;
+	}
+	if(lrrc != 0) {
+		if (czone->entries == NULL) {
+			czone->entries = xmalloc(sizeof(struct zoneentry*));
+			czone->entry_count = 0;
+		} else czone->entries = xrealloc(czone->entries, sizeof(struct zoneentry*) * (czone->entry_count + 1));
+		struct zoneentry* ze = xmalloc(sizeof(struct zoneentry));
+		czone->entries[czone->entry_count++] = ze;
+		ze->type = 3;
 	}
 	return 0;
 }

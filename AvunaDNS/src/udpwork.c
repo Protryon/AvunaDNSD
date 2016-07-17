@@ -37,6 +37,7 @@ struct dnsquestion {
 		uint16_t type;
 		;uint16_t class;
 		int logged;
+		int dcab;
 		// formatting issue is fixed with an extra semicolon?
 };
 
@@ -52,6 +53,7 @@ struct dnsrecord {
 		char* ad;
 		char* pd1;
 		char* pd2;
+		int cax;
 };
 
 char* readDomain(unsigned char* data, size_t* doff, size_t len) {
@@ -111,16 +113,16 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 		dr->ttl = 3600;
 		dr->type = 16;
 		dr->pdata = ("AvunaDNSD-" VERSION);
+		dr->cax = 1;
 		(*rrecs)[0] = dr;
 		return;
 	}
-	int dcab = -1;
 	for (size_t i = 0; i < zone->entry_count; i++) {
 		struct zoneentry* ze = zone->entries[i];
 		if (ze->type == 0 && domeq(ze->part.subzone->domain, domain, (*rrecsl) == 0) && rs < 0) {
-			parseZone(dq, dq->type, dq->domain, ze->part.subzone, rrecs, rrecsl, arrecs, arrecsl);
+			parseZone(dq, type, domain, ze->part.subzone, rrecs, rrecsl, arrecs, arrecsl);
 		} else if (ze->type == 1 && (ze->part.dom.type == type || ze->part.dom.pt)) {
-			int ext = dcab != ze->part.dom.type;
+			int ext = dq->dcab != ze->part.dom.type;
 			if (ext) if (startsWith(ze->part.dom.domain, "~")) {
 				for (size_t x = 0; x < *rrecsl; x++) {
 					struct dnsrecord* dr = (*rrecs)[x];
@@ -131,8 +133,8 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 				}
 			}
 			if (domeq(ze->part.dom.domain, domain, ext)) {
-				if (ze->part.dom.data_len == 0 && ze->part.dom.ad == NULL) {
-					dcab = ze->part.dom.type;
+				if (ze->part.dom.data_len == 0 && (ze->part.dom.ad == NULL || strlen(ze->part.dom.ad) < 1)) {
+					dq->dcab = ze->part.dom.type;
 					continue;
 				}
 				if (rs >= 0) {
@@ -162,6 +164,7 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 					dr->ad = ze->part.dom.ad;
 					dr->pd1 = ze->part.dom.pd1;
 					dr->pd2 = ze->part.dom.pd2;
+					dr->cax = 0;
 					(*rrecs)[(*rrecsl)++] = dr;
 				}
 			}
@@ -190,6 +193,7 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 						dr->ad = ze->part.dom.ad;
 						dr->pd1 = ze->part.dom.pd1;
 						dr->pd2 = ze->part.dom.pd2;
+						dr->cax = 0;
 						(*rrecs)[(*rrecsl)++] = dr;
 					}
 				} else {
@@ -218,6 +222,7 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 							dr->ad = zed->part.dom.ad;
 							dr->pd1 = zed->part.dom.pd1;
 							dr->pd2 = zed->part.dom.pd2;
+							dr->cax = 0;
 							(*rrecs)[(*rrecsl)++] = dr;
 							x++;
 							if (x == zeel) x = 0;
@@ -246,6 +251,7 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 								dr->ad = ze->part.dom.ad;
 								dr->pd1 = ze->part.dom.pd1;
 								dr->pd2 = ze->part.dom.pd2;
+								dr->cax = 0;
 								(*rrecs)[(*rrecsl)++] = dr;
 								break;
 							}
@@ -261,22 +267,28 @@ void parseZone(struct dnsquestion* dq, uint16_t type, char* domain, struct zone*
 	}
 	if (*rrecsl == 0) {
 		if (type == 1) {
-			parseZone(dq, 5, dq->domain, zone, rrecs, rrecsl, arrecs, arrecsl);
+			parseZone(dq, 5, domain, zone, rrecs, rrecsl, arrecs, arrecsl);
 		}
 	}
 	if (arrecs != rrecs) {
 		if (type == 5) {
-			for (size_t i = 0; i < *rrecsl; i++) {
-				if ((*rrecs)[i]->type == 5) {
+			size_t tr = *rrecsl;
+			for (size_t i = 0; i < tr; i++) {
+				if (!(*rrecs)[i]->cax && (*rrecs)[i]->type == 5) {
+					(*rrecs)[i]->cax = 1;
 					parseZone(dq, 1, (*rrecs)[i]->pdata, zone, arrecs, arrecsl, arrecs, arrecsl);
 				}
 			}
 		} else if (type == 15) {
-			for (size_t i = 0; i < *rrecsl; i++) {
-				if ((*rrecs)[i]->type == 15) {
+			size_t tr = *rrecsl;
+			for (size_t i = 0; i < tr; i++) {
+				if (!(*rrecs)[i]->cax && (*rrecs)[i]->type == 15) {
+					(*rrecs)[i]->cax = 1;
 					char* dom = (*rrecs)[i]->pdata;
 					dom = strchr(dom, ' ');
-					if (dom != NULL && strlen(dom) > 2) parseZone(dq, 1, dom + 1, zone, arrecs, arrecsl, arrecs, arrecsl);
+					if (dom != NULL && strlen(dom) > 2) {
+						parseZone(dq, 1, dom + 1, zone, arrecs, arrecsl, arrecs, arrecsl);
+					}
 				}
 			}
 		}
@@ -410,6 +422,7 @@ void handleUDP(struct mysql_data* mysql, struct logsess* log, struct zone* zone,
 		goto wr;
 	}
 	for (int x = 0; x < head->qdcount; x++) {
+		qds[x].dcab = -1;
 		parseZone(&qds[x], qds[x].type, qds[x].domain, zone, &rrecs, &rrecsl, &arrecs, &arrecsl);
 	}
 	rhead->ancount = rrecsl;

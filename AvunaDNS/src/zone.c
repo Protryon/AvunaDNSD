@@ -19,7 +19,6 @@
 #include <stdio.h>
 
 int domeq(const char* dom1, const char* dom2, int ext) {
-	if (streq(dom1, "@")) return 1;
 	int psu = startsWith(dom1, "~");
 	if (psu && streq(dom1, "~@")) return ext;
 	if (psu && !ext) return 0;
@@ -35,7 +34,7 @@ int domeq(const char* dom1, const char* dom2, int ext) {
 	char* m2 = NULL;
 	while (strlen(d1) > 0) {
 		m2 = strtok_r(m2 == NULL ? d2 : NULL, ".", &sp2);
-		if (streq(d1, "*")) goto cont;
+		if (streq(d1, "*") || streq(d1, "@")) goto cont;
 		if (streq(d1, "**")) {
 			char* nd = d1 + strlen(d1) + 1;
 			if (m2 == NULL && strlen(nd) == 0) break;
@@ -44,7 +43,7 @@ int domeq(const char* dom1, const char* dom2, int ext) {
 				xfree(d2);
 				return 0;
 			}
-			if (strlen(nd) > 0 && (!streq(nd, "*") && !streq_nocase(nd, m2))) {
+			if (strlen(nd) > 0 && (!(streq(nd, "*") || streq(nd, "@")) && !streq_nocase(nd, m2))) {
 				continue;
 			} else {
 				d1 = nd;
