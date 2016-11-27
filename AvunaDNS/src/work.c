@@ -91,6 +91,8 @@ void run_work(struct work_param* param) {
 			if (conn == NULL) continue;
 			if ((re & POLLERR) == POLLERR) {
 				//printf("POLLERR in worker poll! This is bad!\n");
+				closeConn(param, conn);
+				conn = NULL;
 				goto cont;
 			}
 			if ((re & POLLHUP) == POLLHUP) {

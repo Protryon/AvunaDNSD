@@ -46,6 +46,17 @@ struct udptcp_accept_param {
 		} param;
 };
 
+/*
+ struct collection* thrs;
+
+ struct thrmng {
+ pthread_t pt;
+ char* name;
+ clockid_t cid;
+ double prevtime;
+ };
+ */
+
 int main(int argc, char* argv[]) {
 	signal(SIGPIPE, SIG_IGN);
 	if (getuid() != 0 || getgid() != 0) {
@@ -442,18 +453,25 @@ int main(int argc, char* argv[]) {
 		mysql_data->mysql_refresh = mysql_refresh;
 		mysql_data->complete = 0;
 		mysql_data->szone = NULL;
+		//thrs = new_collection(0);
 		if (mysql) {
 			pthread_t ptx;
 			int pc = pthread_create(&ptx, NULL, mysql_thread, mysql_data);
 			if (pc) {
 				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update @ %s server.", pc, servs[i]->id);
 				else errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update.", pc);
-			}
+			}/* else {
+			 struct thrmng* tm = xcalloc(sizeof(struct thrmng));
+			 tm->pt = ptx;
+			 tm->name = "Mysql Thread";
+			 pthread_getcpuclockid(ptx, &tm->cid);
+			 add_collection(thrs, tm);
+			 }*/
 		}
 		for (int x = 0; x < tc; x++) {
 			if (propo == SOCK_STREAM) {
 				struct work_param* wp = xmalloc(sizeof(struct work_param));
-				wp->conns = new_collection(mc < 1 ? 0 : mc / tc, sizeof(struct conn*));
+				wp->conns = new_collection(mc < 1 ? 0 : mc / tc);
 				wp->logsess = slog;
 				wp->i = x;
 				wp->sport = port;
@@ -494,7 +512,15 @@ int main(int argc, char* argv[]) {
 			if (c != 0) {
 				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, this will cause occasional connection hanging @ %s server.", c, servs[i]->id);
 				else errlog(delog, "Error creating thread: pthread errno = %i, this will cause occasional connection hanging.", c);
-			}
+			}/* else {
+			 struct thrmng* tm = xcalloc(sizeof(struct thrmng));
+			 tm->pt = pt;
+			 tm->name = xmalloc(129);
+			 tm->name[128] = 0;
+			 snprintf(tm->name, 128, "Worker Thread (%s) #%i", aps[i].tcp ? "TCP" : "UDP", i);
+			 pthread_getcpuclockid(pt, &tm->cid);
+			 add_collection(thrs, tm);
+			 }*/
 		}
 		if (aps[i].tcp) {
 			int c = pthread_create(&pt, NULL, (void *) run_accept, aps[i].param.accept);
@@ -502,10 +528,29 @@ int main(int argc, char* argv[]) {
 				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, server %s is shutting down.", c, servs[i]->id);
 				else errlog(delog, "Error creating thread: pthread errno = %i, server is shutting down.", c);
 				close(aps[i].param.accept->server_fd);
-			}
+			}/* else {
+			 struct thrmng* tm = xcalloc(sizeof(struct thrmng));
+			 tm->pt = pt;
+			 tm->name = xmalloc(129);
+			 tm->name[128] = 0;
+			 snprintf(tm->name, 128, "Accept Thread #%i", i);
+			 pthread_getcpuclockid(pt, &tm->cid);
+			 add_collection(thrs, tm);
+			 }*/
 		}
 	}
-	while (sr > 0)
-		sleep(1);
+	while (sr > 0) {
+		/*for (size_t i = 0; i < thrs->size; i++) {
+		 if (thrs->data[i] != NULL) {
+		 struct thrmng* tm = thrs->data[i];
+		 struct timespec ts;
+		 clock_gettime(tm->cid, &ts);
+		 double tt = (double) ts.tv_sec + ((double) ts.tv_nsec / 1000000.);
+		 printf("%s: %f s (+%f)\n", tm->name, tt, tt - tm->prevtime);
+		 tm->prevtime = tt;
+		 }
+		 }*/
+		sleep(60);
+	}
 	return 0;
 }
