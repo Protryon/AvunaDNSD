@@ -6,7 +6,7 @@
  */
 
 #include "globals.h"
-#ifdef SUPPORTS_MYSQL
+#ifndef NOSUPPORTS_MYSQL
 
 #ifndef MYSQL_PARSER_H_
 #define MYSQL_PARSER_H_

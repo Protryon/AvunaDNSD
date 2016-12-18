@@ -123,13 +123,13 @@ int main(int argc, char* argv[]) {
 		printf("Already running! PID = %i\n", pid);
 		exit(0);
 	} else {
-
 		pid_t f = fork();
-		if (f == 0) {
-			printf("Now running as daemon!\n");
+		if (f > 0) {
+			printf("Daemonized! PID = %i\n", f);
+
 			exit(0);
 		} else {
-			printf("Daemonized! PID = %i\n", f);
+			printf("Now running as daemon!\n");
 			if (setsid() < 0) {
 				printf("Failed to exit process tree: %s\n", strerror(errno));
 				return 1;
@@ -454,6 +454,7 @@ int main(int argc, char* argv[]) {
 		mysql_data->complete = 0;
 		mysql_data->szone = NULL;
 		//thrs = new_collection(0);
+#ifdef SUPPORTS_MYSQL
 		if (mysql) {
 			pthread_t ptx;
 			int pc = pthread_create(&ptx, NULL, mysql_thread, mysql_data);
@@ -468,6 +469,7 @@ int main(int argc, char* argv[]) {
 			 add_collection(thrs, tm);
 			 }*/
 		}
+#endif
 		for (int x = 0; x < tc; x++) {
 			if (propo == SOCK_STREAM) {
 				struct work_param* wp = xmalloc(sizeof(struct work_param));

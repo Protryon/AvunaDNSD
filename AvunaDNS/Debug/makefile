@@ -5,6 +5,8 @@
 -include ../makefile.init
 
 RM := rm -rf
+CP := cp -r
+CHMOD := chmod
 
 # All of the sources participating in the build are defined here
 -include sources.mk
@@ -25,11 +27,26 @@ endif
 # All Target
 all: AvunaDNSD
 
+debug: $(OBJS) $(USER_OBJS)
+	@echo 'Building target: $@'
+	@echo 'Invoking: GCC C Linker'
+	$(CC) -DDEBUG -DSUPPORTS_MYSQL $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS) -lmysqlclient
+	@echo 'Finished building target: $@'
+	@echo ' '
+
+nomysql: $(OBJS) $(USER_OBJS)
+	@echo 'Building target: $@'
+	@echo 'Invoking: GCC C Linker'
+	$(CC) $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS)
+	@echo 'Finished building target: $@'
+	@echo ' '
+
+
 # Tool invocations
 AvunaDNSD: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc  -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS)
+	$(CC) -DSUPPORTS_MYSQL $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS) -lmysqlclient
 	@echo 'Finished building target: $@'
 	@echo ' '
 
