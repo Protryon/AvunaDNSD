@@ -263,6 +263,9 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 }
 
 void mysql_thread(struct mysql_data* data) {
+	char pcheck[256];
+	pcheck[255] = 0;
+	pcheck[0] = 0;
 	while (1) {
 		data->complete = 0;
 		MYSQL* db_conn = mysql_init(NULL);
@@ -270,17 +273,34 @@ void mysql_thread(struct mysql_data* data) {
 			printf("Error connecting to mysql: %s\n", mysql_error(db_conn));
 			return;
 		}
+		if (mysql_query(db_conn, "CHECKSUM TABLE records;")) {
+			printf("Error checksumming records: %s\n", mysql_error(db_conn));
+			goto mcnt;
+		}
+		MYSQL_RES* wres = mysql_store_result(db_conn);
+		if (mysql_num_rows(wres) != 1) {
+			printf("Invalid checksum response number of rows: %lu\n", mysql_num_rows(wres));
+			mysql_free_result(wres);
+			goto mcnt;
+		}
+		MYSQL_ROW row = mysql_fetch_row(wres);
+		if(streq_nocase(row[1], pcheck)) {
+			mysql_free_result(wres);
+			goto mcnt;
+		}
+		memcpy(pcheck, row[1], strlen(row[1]) + 1);
+		mysql_free_result(wres);
 		if (mysql_query(db_conn, "SELECT * FROM records WHERE domain = '@' AND rec_type IS NULL ORDER BY priority")) {
 			printf("Error selecting from records: %s\n", mysql_error(db_conn));
 			goto mcnt;
 		}
-		MYSQL_RES* wres = mysql_store_result(db_conn);
+		wres = mysql_store_result(db_conn);
 		if (mysql_num_rows(wres) != 1) {
 			printf("Invalid number of root zones: %lu\n", mysql_num_rows(wres));
 			mysql_free_result(wres);
 			goto mcnt;
 		}
-		MYSQL_ROW row = mysql_fetch_row(wres);
+		row = mysql_fetch_row(wres);
 		long int rid = strtol(row[0], NULL, 10);
 		mysql_free_result(wres);
 		if (data->czone != NULL) {
