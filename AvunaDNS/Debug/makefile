@@ -25,28 +25,22 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: AvunaDNSD
+all: mysql
 
-debug: $(OBJS) $(USER_OBJS)
-	@echo 'Building target: $@'
-	@echo 'Invoking: GCC C Linker'
-	$(CC) -DDEBUG -DSUPPORTS_MYSQL $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS) -lmysqlclient
-	@echo 'Finished building target: $@'
-	@echo ' '
+debug: CFLAGS += -DDEBUG
+debug: mysql
 
-nomysql: $(OBJS) $(USER_OBJS)
-	@echo 'Building target: $@'
-	@echo 'Invoking: GCC C Linker'
-	$(CC) $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS)
-	@echo 'Finished building target: $@'
-	@echo ' '
+nomysql: AvunaDNSD
 
+mysql: CFLAGS += -DSUPPORTS_MYSQL
+mysql: LIBS += -lmysqlclient
+mysql: AvunaDNSD
 
 # Tool invocations
 AvunaDNSD: $(OBJS) $(USER_OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	$(CC) -DSUPPORTS_MYSQL $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS) -lmysqlclient
+	$(CC) $(CFLAGS) -o "AvunaDNSD" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
