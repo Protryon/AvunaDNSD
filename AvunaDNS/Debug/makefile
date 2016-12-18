@@ -7,6 +7,7 @@
 RM := rm -rf
 CP := cp -r
 CHMOD := chmod
+MKDIR := mkdir
 
 # All of the sources participating in the build are defined here
 -include sources.mk
@@ -48,6 +49,14 @@ AvunaDNSD: $(OBJS) $(USER_OBJS)
 clean:
 	-$(RM) $(EXECUTABLES)$(OBJS)$(C_DEPS) AvunaDNSD
 	-@echo ' '
+
+install: 
+	-$(CP) AvunaDNSD /usr/bin/AvunaDNSD
+	-$(CHMOD) 755 /usr/bin/AvunaDNSD
+	-$(MKDIR) -p /etc/avuna/dnsd/
+	-$(CP) ../master /etc/avuna/dnsd/master
+	-$(CP) ../main.cfg /etc/avuna/dnsd/main.cfg
+
 
 .PHONY: all clean dependents
 .SECONDARY:
