@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include "udpwork.h"
 #include <stdio.h>
+#include <unistd.h>
 
 int domeq(const char* dom1, const char* dom2, int ext) {
 	int psu = startsWith(dom1, "~");
