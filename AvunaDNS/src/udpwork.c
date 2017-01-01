@@ -38,7 +38,6 @@ struct dnsquestion {
 		;uint16_t class;
 		int logged;
 		int dcab;
-		// formatting issue is fixed with an extra semicolon?
 };
 
 struct dnsrecord {
@@ -57,8 +56,8 @@ struct dnsrecord {
 };
 
 char* readDomain(unsigned char* data, size_t* doff, size_t len) {
-	int x = 0;
-	int i = *doff;
+	unsigned char x = 0;
+	size_t i = *doff;
 	char* dom = xmalloc(1);
 	dom[0] = 0;
 	int di = 0;
@@ -73,6 +72,7 @@ char* readDomain(unsigned char* data, size_t* doff, size_t len) {
 			i = pt;
 			f = 1;
 		} else if ((x & 0x80) == 0x80 || (x & 0x40) == 0x40) {
+			xfree(dom);
 			return NULL;
 		}
 		if (i >= len || i < 0) break;
