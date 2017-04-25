@@ -88,7 +88,7 @@ void run_work(struct work_param* param) {
 		for (int i = 0; i < cc; i++) {
 			int re = fds[i].revents;
 			struct conn* conn = conns[i];
-			if (conn == NULL) continue;
+			if (conn == NULL || re == 0) continue;
 			if ((re & POLLERR) == POLLERR) {
 				//printf("POLLERR in worker poll! This is bad!\n");
 				closeConn(param, conn);

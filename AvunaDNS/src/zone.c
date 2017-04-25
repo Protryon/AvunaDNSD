@@ -353,11 +353,9 @@ int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log) 
 				//de->data_len += sl;
 			} else if (dt == 4) {
 				size_t sl = strlen(args[da]);
-				if (de->data == NULL) {
-					de->data = xmalloc(sl);
-				} else {
-					de->data = xrealloc(de->data, de->data_len + sl);
-				}
+				if (sl > 255) sl = 255;
+				de->data = xrealloc(de->data, de->data_len + sl + 1);
+				((uint8_t*) de->data)[de->data_len++] = (uint8_t) sl;
 				memcpy(de->data + de->data_len, args[da], sl);
 				de->data_len += sl;
 			}

@@ -74,7 +74,7 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 			int ie = 0;
 			int iq = 0;
 			size_t ogdl = strlen(ogd);
-			args[ai++] = ogd;
+			args[ai++] = ogd + ((ogdl > 0 && ogd[0] == '"') ? 1 : 0);
 			for (size_t i = 0; i < ogdl; i++) {
 				if (ogd[i] == '\\') { // TODO: remove extra backslashes
 					ie = !ie;
@@ -87,6 +87,10 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 					args[ai++] = ogd + i + 1;
 				}
 				if (ai > 62) break;
+			}
+			if (ai > 0) {
+				size_t slxx = strlen(args[ai - 1]);
+				if(slxx > 0 && args[ai - 1][slxx - 1] == '"') args[ai - 1][slxx - 1] = 0;
 			}
 			args[ai] = NULL;
 			ze->type = 1;
@@ -236,11 +240,9 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 				//de->data_len += sl;
 			} else if (dt == 4) {
 				size_t sl = strlen(args[da]);
-				if (de->data == NULL) {
-					de->data = xmalloc(sl);
-				} else {
-					de->data = xrealloc(de->data, de->data_len + sl);
-				}
+				if (sl > 255) sl = 255;
+				de->data = xrealloc(de->data, de->data_len + sl + 1);
+				((uint8_t*) de->data)[de->data_len++] = (uint8_t) sl;
 				memcpy(de->data + de->data_len, args[da], sl);
 				de->data_len += sl;
 			}
