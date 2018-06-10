@@ -165,7 +165,7 @@ int mysql_recurse(MYSQL_RES* wres, struct zone* czone, int zid) {
 					goto eg2;
 				}
 				de->type = 15;
-				uint16_t pref = atoi(args[0]);
+				uint16_t pref = htons((uint16_t)atoi(args[0]));
 				de->data = xmalloc(sizeof(uint16_t));
 				memcpy(de->data, &pref, sizeof(uint16_t));
 				de->data_len = sizeof(uint16_t);
