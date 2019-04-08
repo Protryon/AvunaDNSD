@@ -8,10 +8,10 @@
 #ifndef WORK_H_
 #define WORK_H_
 
-#include "collection.h"
 #include "accept.h"
-#include "log.h"
 #include "udpwork.h"
+#include <avuna/log.h>
+
 
 struct work_param {
 		struct collection* conns;

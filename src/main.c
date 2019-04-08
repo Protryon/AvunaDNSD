@@ -5,17 +5,24 @@
  *      Author: root
  */
 
+#include "zone.h"
+#include "udpwork.h"
+#include "accept.h"
+#include "globals.h"
+#include "work.h"
+#include "mysql_parser.h"
+#include "version.h"
+#include <avuna/log.h>
+#include <avuna/config.h>
+#include <avuna/string.h>
+#include <avuna/util.h>
+#include <avuna/streams.h>
 #include <unistd.h>
 #include <stdio.h>
-#include "config.h"
 #include <errno.h>
-#include "xstring.h"
-#include "version.h"
-#include "util.h"
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <signal.h>
-#include "streams.h"
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,39 +30,21 @@
 #include <netinet/ip.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include "accept.h"
-#include "globals.h"
-#include "collection.h"
-#include "work.h"
 #include <sys/types.h>
-#include "zone.h"
-#include "udpwork.h"
-#include "mysql_parser.h"
 
 struct udp_accept_param { // ;)
-		int works_count;
-		struct udpwork_param** works;
-		int sfd;
+	int works_count;
+	struct udpwork_param** works;
+	int sfd;
 };
 
 struct udptcp_accept_param {
-		int tcp;
-		union param {
-				struct accept_param* accept;
-				struct udp_accept_param udp;
-		} param;
+	int tcp;
+	union param {
+		struct accept_param* accept;
+		struct udp_accept_param udp;
+	} param;
 };
-
-/*
- struct collection* thrs;
-
- struct thrmng {
- pthread_t pt;
- char* name;
- clockid_t cid;
- double prevtime;
- };
- */
 
 int main(int argc, char* argv[]) {
 	signal(SIGPIPE, SIG_IGN);
@@ -72,7 +61,7 @@ int main(int argc, char* argv[]) {
 		memcpy(cwd, "/etc/avuna/", 11);
 		cwd[11] = 0;
 		char* dn = (char*) xcopy(DAEMON_NAME, strlen(DAEMON_NAME) + 1, 0);
-		strcat(cwd, toLowerCase(dn));
+		strcat(cwd, str_tolower(dn));
 		xfree(dn);
 	} else {
 		size_t l = strlen(argv[1]);
@@ -86,7 +75,7 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	strncat(cwd, "/main.cfg", 9);
-	cfg = loadConfig(cwd);
+	cfg = config_load(cwd);
 	if (cfg == NULL) {
 		printf("Error loading Config<%s>: %s\n", cwd, errno == EINVAL ? "File doesn't exist!" : strerror(errno));
 		return 1;

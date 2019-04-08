@@ -7,18 +7,18 @@
 
 #include "work.h"
 #include "accept.h"
-#include "xstring.h"
+#include "udpwork.h"
+#include <avuna/string.h>
+#include <avuna/util.h>
+#include <avuna/streams.h>
+#include <avuna/log.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <poll.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <pthread.h>
-#include "collection.h"
-#include "util.h"
-#include "streams.h"
 #include <sys/ioctl.h>
-#include "udpwork.h"
 #include <stdint.h>
 
 void closeConn(struct work_param* param, struct conn* conn) {

@@ -8,10 +8,10 @@
 #ifndef UDPWORK_H_
 #define UDPWORK_H_
 
-#include "log.h"
-#include <netinet/in.h>
 #include "zone.h"
 #include "accept.h"
+#include <avuna/log.h>
+#include <netinet/in.h>
 
 struct udpwork_param {
 		struct logsess* logsess;

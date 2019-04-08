@@ -8,10 +8,9 @@
 #ifndef ACCEPT_H_
 #define ACCEPT_H_
 
-#include "config.h"
-#include "collection.h"
-#include <sys/socket.h>
 #include "work.h"
+#include <avuna/config.h>
+#include <sys/socket.h>
 #include <netinet/ip6.h>
 
 struct accept_param {

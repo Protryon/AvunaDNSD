@@ -6,15 +6,15 @@
  */
 
 #include "udpwork.h"
-#include "util.h"
+#include "zone.h"
+#include "accept.h"
+#include "version.h"
+#include <avuna/util.h>
+#include <avuna/string.h>
 #include <sys/socket.h>
 #include <netinet/ip.h>
-#include "zone.h"
-#include "xstring.h"
 #include <errno.h>
-#include "accept.h"
 #include <arpa/inet.h>
-#include "version.h"
 
 struct dnsheader {
 		uint16_t id;

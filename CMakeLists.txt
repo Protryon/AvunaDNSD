@@ -22,7 +22,7 @@ file(GLOB dnsd_src
 )
 
 add_executable(avuna-dnsd ${dnsd_src})
-target_link_libraries(avuna-dnsd -lssl -lcrypto -lpthread -ldl -export-dynamic)
+target_link_libraries(avuna-dnsd -lavuna-util -lpthread)
 if (MYSQL)
     target_link_libraries(avuna-dnsd -lmysqlclient)
 endif()

@@ -9,11 +9,11 @@
 
 #include "mysql_parser.h"
 #include "udpwork.h"
-#include <mysql/mysql.h>
-#include "util.h"
-#include "xstring.h"
-#include <ctype.h>
 #include "zone.h"
+#include <avuna/util.h>
+#include <avuna/string.h>
+#include <mysql/mysql.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <sys/socket.h>

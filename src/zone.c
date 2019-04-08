@@ -6,16 +6,16 @@
  */
 
 #include "zone.h"
-#include "util.h"
+#include "udpwork.h"
+#include <avuna/util.h>
+#include <avuna/streams.h>
+#include <avuna/string.h>
+#include <avuna/log.h>
 #include <fcntl.h>
-#include "streams.h"
-#include "xstring.h"
 #include <errno.h>
-#include "log.h"
 #include <ctype.h>
 #include <arpa/inet.h>
 #include <stdio.h>
-#include "udpwork.h"
 #include <stdio.h>
 #include <unistd.h>
 

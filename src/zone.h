@@ -9,7 +9,7 @@
 #define ZONE_H_
 
 #include <netinet/in.h>
-#include "log.h"
+#include <avuna/log.h>
 
 struct domentry {
 		char* domain;
