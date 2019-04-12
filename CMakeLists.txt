@@ -50,7 +50,6 @@ file(GLOB export_headers
 )
 
 install(FILES ${export_headers} DESTINATION "include/avuna/")
-install(FILES ${config_files} DESTINATION "/etc/avuna/dnsd/")
 
 set(CPACK_DEBIAN_PACKAGE_NAME avunadnsd)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
