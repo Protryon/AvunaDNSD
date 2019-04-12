@@ -8,32 +8,14 @@
 #ifndef ACCEPT_H_
 #define ACCEPT_H_
 
-#include "work.h"
-#include <avuna/config.h>
+#include "tcp_network.h"
+#include "server.h"
 #include <sys/socket.h>
 #include <netinet/ip6.h>
 
 struct accept_param {
-		int server_fd;
-		int port;
-		struct cnode* config;
-		int works_count;
-		struct work_param** works;
-		struct logsess* logsess;
-		struct zone* zone;
-};
-
-struct conn {
-		int fd;
-		struct sockaddr_in6 addr;
-		socklen_t addrlen;
-		int tcp;
-		unsigned char* readBuffer;
-		size_t readBuffer_size;
-		size_t readBuffer_checked;
-		unsigned char* writeBuffer;
-		size_t writeBuffer_size;
-		int state;
+	struct server_info* server;
+	struct server_binding* binding;
 };
 
 void run_accept(struct accept_param* param);

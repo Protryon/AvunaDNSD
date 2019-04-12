@@ -8,52 +8,51 @@
 #ifndef ZONE_H_
 #define ZONE_H_
 
+#include "dns.h"
 #include <netinet/in.h>
 #include <avuna/log.h>
+#include <avuna/pmem.h>
 
-struct domentry {
-		char* domain;
-		int type;
-		int pt;
-		int ttlmin;
-		int ttlmax;
-		size_t data_len;
-		void* data;
-		char* ad;
-		char* pd1;
-		char* pd2;
-		char* pdata;
+struct dns_entry {
+	struct dns_record* record;
+	int is_psuedo_type;
+	uint32_t ttl_minimum;
+	uint32_t ttl_maximum;
+	int is_negative;
 };
 
 struct roundrobin {
-		int per;
+	ssize_t per;
 };
 
-union zoneparts {
+#define ZONE_SUBZONE 0
+#define ZONE_ENTRY 1
+#define ZONE_ROUNDSTART 2
+#define ZONE_ROUNDSTOP 3
+
+struct zone_entry {
+	int type;
+	union {
 		struct zone* subzone;
-		struct domentry dom;
-		struct roundrobin rrst;
-};
-
-struct zoneentry {
-		int type; // 0 = subzone, 1 = domentry, 2 = roundstart 3 = roundstop
-		union zoneparts part;
+		struct dns_entry dom;
+		struct roundrobin roundrobin;
+	} part;
 };
 
 struct zone {
-		char* domain;
-		struct zoneentry** entries;
-		size_t entry_count;
+	struct mempool* pool;
+	char* domain;
+	struct list* entries;
 };
 
 const char* typeString(int type);
 
-int domeq(const char* dom1, const char* dom2, int ext);
+int domeq(char* domain1, char* domain2, int extensible);
 
-int addZoneEntry(struct zone* zone, struct zoneentry* entry);
+int zone_add_entry(struct zone* zone, struct zone_entry* entry);
 
-int readZone(struct zone* zone, char* file, char* relpath, struct logsess* log);
+int zone_read(struct zone* zone, char* file, char* relative_path, struct logsess* log);
 
-void freeZone(struct zone* zone);
+void zone_parse_dns_entry(struct mempool* pool, struct logsess* log, char* file, ssize_t line_number, struct dns_entry* dns_entry, char* args[], size_t arg_count);
 
 #endif /* ZONE_H_ */

@@ -5,9 +5,12 @@
  *      Author: root
  */
 #include "accept.h"
-#include "work.h"
-#include <avuna/util.h>
+#include "tcp_network.h"
+#include "connection.h"
+#include <avuna/pmem.h>
+#include <avuna/pmem_hooks.h>
 #include <avuna/string.h>
+#include <avuna/buffer.h>
 #include <sys/socket.h>
 #include <errno.h>
 #include <stdio.h>
@@ -20,65 +23,53 @@
 
 void run_accept(struct accept_param* param) {
 	static int one = 1;
-	static unsigned char onec = 1;
 	struct timeval timeout;
 	timeout.tv_sec = 60;
 	timeout.tv_usec = 0;
 	struct pollfd spfd;
 	spfd.events = POLLIN;
 	spfd.revents = 0;
-	spfd.fd = param->server_fd;
+	spfd.fd = param->binding->fd;
 	while (1) {
-		struct conn* c = xmalloc(sizeof(struct conn));
-		memset(&c->addr, 0, sizeof(struct sockaddr_in6));
-		c->addrlen = sizeof(struct sockaddr_in6);
-		c->readBuffer = NULL;
-		c->readBuffer_size = 0;
-		c->readBuffer_checked = 0;
-		c->writeBuffer = NULL;
-		c->writeBuffer_size = 0;
-		c->tcp = 1;
-		c->state = 0;
+		struct mempool* pool = mempool_new();
+		struct conn* conn = pmalloc(pool, sizeof(struct conn));
+		conn->pool = pool;
+		memset(&conn->addr, 0, sizeof(struct sockaddr_in6));
+		conn->addrlen = sizeof(struct sockaddr_in6);
+		buffer_init(&conn->read_buffer, conn->pool);
+		buffer_init(&conn->write_buffer, conn->pool);
+		conn->state = 0;
+		repoll:;
 		if (poll(&spfd, 1, -1) < 0) {
-			printf("Error while polling server: %s\n", strerror(errno));
-			xfree(c);
+			errlog(param->server->logsess, "Error while polling server: %s", strerror(errno));
+			pfree(conn->pool);
 			continue;
 		}
 		if ((spfd.revents ^ POLLIN) != 0) {
-			printf("Error after polling server: %i (poll revents), closing server!\n", spfd.revents);
-			xfree(c);
-			close(param->server_fd);
+			errlog(param->server->logsess, "Error after polling server: %i (poll revents)", spfd.revents);
+			pfree(conn->pool);
 			break;
 		}
 		spfd.revents = 0;
-		int cfd = accept(param->server_fd, &c->addr, &c->addrlen);
+		int cfd = accept(param->binding->fd, (struct sockaddr*) &conn->addr, &conn->addrlen);
 		if (cfd < 0) {
-			if (errno == EAGAIN) continue;
-			printf("Error while accepting client: %s\n", strerror(errno));
-			xfree(c);
+			if (errno == EAGAIN) {
+				goto repoll;
+			}
+			errlog(param->server->logsess, "Error while accepting client: %s", strerror(errno));
+			pfree(conn->pool);
 			continue;
 		}
-		c->fd = cfd;
+		conn->fd = cfd;
+		phook(conn->pool, close_hook, (void*) conn->fd);
 		if (setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, (char *) &timeout, sizeof(timeout))) printf("Setting recv timeout failed! %s\n", strerror(errno));
 		if (setsockopt(cfd, SOL_SOCKET, SO_SNDTIMEO, (char *) &timeout, sizeof(timeout))) printf("Setting send timeout failed! %s\n", strerror(errno));
 		if (setsockopt(cfd, IPPROTO_TCP, TCP_NODELAY, (void *) &one, sizeof(one))) printf("Setting TCP_NODELAY failed! %s\n", strerror(errno));
 		if (fcntl(cfd, F_SETFL, fcntl(cfd, F_GETFL) | O_NONBLOCK) < 0) {
-			printf("Setting O_NONBLOCK failed! %s, this error cannot be recovered, closing client.\n", strerror(errno));
-			close(cfd);
+			errlog(param->server->logsess, "Setting O_NONBLOCK failed! %s, this error cannot be recovered, closing client.\n", strerror(errno));
+			pfree(conn->pool);
 			continue;
 		}
-		struct work_param* work = param->works[rand() % param->works_count];
-		if (add_collection(work->conns, c)) { // TODO: send to lowest load, not random
-			if (errno == EINVAL) {
-				printf("Too many open connections! Closing client.\n");
-			} else {
-				printf("Collection failure! Closing client. %s\n", strerror(errno));
-			}
-			close(cfd);
-			continue;
-		}
-		if (write(work->pipes[1], &onec, 1) < 1) {
-			printf("Failed to write to wakeup pipe! Things may slow down. %s\n", strerror(errno));
-		}
+		queue_push(param->server->prepared_connections, conn);
 	}
 }
