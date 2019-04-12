@@ -24,9 +24,8 @@ struct mysql_zone {
     char* password;
     char* schema;
     size_t refresh_rate;
-    int complete;
-    struct zone* completed_zone;
     struct zone* saved_zone;
+    struct zone* backup_zone;
     struct server_zone* zone;
 };
 

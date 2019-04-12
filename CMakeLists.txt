@@ -49,10 +49,6 @@ file(GLOB export_headers
     "lib/include/avuna/*.h"
 )
 
-file(GLOB config_files
-    "cfg-default/*"
-)
-
 install(FILES ${export_headers} DESTINATION "include/avuna/")
 install(FILES ${config_files} DESTINATION "/etc/avuna/dnsd/")
 

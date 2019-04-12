@@ -26,8 +26,8 @@ void run_udp_network(struct accept_param* param) {
         ssize_t x = recvfrom(param->binding->fd, message_buf, 512, 0, (struct sockaddr*) &addr, &addrl);
         if (x < 0) continue;
         if (x > 0) {
-            if (param->server->zone->type == SERVER_ZONE_MYSQL && param->server->zone->data.mysql_zone->complete && active_zone != param->server->zone->data.mysql_zone->completed_zone) {
-                active_zone = param->server->zone->data.mysql_zone->completed_zone;
+            if (param->server->zone->type == SERVER_ZONE_MYSQL && active_zone != param->server->zone->data.mysql_zone->saved_zone) {
+                active_zone = param->server->zone->data.mysql_zone->saved_zone;
             }
             if (active_zone == NULL) {
                 continue;

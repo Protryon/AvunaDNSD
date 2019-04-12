@@ -96,8 +96,8 @@ void run_tcp_network(struct work_param* param) {
 	}
 	while (1) {
 		int event_count = epoll_wait(param->epoll_fd, events, 1024, -1);
-		if (param->server->zone->type == SERVER_ZONE_MYSQL && param->server->zone->data.mysql_zone->complete && active_zone != param->server->zone->data.mysql_zone->completed_zone) {
-			active_zone = param->server->zone->data.mysql_zone->completed_zone;
+		if (param->server->zone->type == SERVER_ZONE_MYSQL && active_zone != param->server->zone->data.mysql_zone->saved_zone) {
+			active_zone = param->server->zone->data.mysql_zone->saved_zone;
 		}
 		if (event_count < 0) {
 			printf("Epoll error in worker thread! %s\n", strerror(errno));

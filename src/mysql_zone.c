@@ -119,7 +119,6 @@ void mysql_thread(struct mysql_zone* data) {
 	checksum[255] = 0;
 	checksum[0] = 0;
 	while (1) {
-		data->complete = 0;
 		MYSQL* db_conn = mysql_init(NULL);
 		if (!mysql_real_connect(db_conn, data->host, data->username, data->password, data->schema, data->port, NULL, 0)) {
 			printf("Error connecting to mysql: %s\n", mysql_error(db_conn));
@@ -155,34 +154,27 @@ void mysql_thread(struct mysql_zone* data) {
 		row = mysql_fetch_row(mysql_result);
 		uint64_t row_id = strtoul(row[0], NULL, 10);
 		mysql_free_result(mysql_result);
-		if (data->completed_zone != NULL) {
-			pfree(data->completed_zone->pool);
-			data->completed_zone = NULL;
-		}
 		struct mempool* pool = mempool_new();
-		data->completed_zone = pmalloc(pool, sizeof(struct zone));
-		data->completed_zone->pool = pool;
-		data->completed_zone->domain = NULL;
-		data->completed_zone->entries = list_new(8, pool);
+		struct zone* completed_zone = pmalloc(pool, sizeof(struct zone));
+		completed_zone->pool = pool;
+		completed_zone->domain = NULL;
+		completed_zone->entries = list_new(8, pool);
 		if (mysql_query(db_conn, "SELECT * FROM records WHERE domain != '@' OR rec_type != NULL ORDER BY priority")) {
 			printf("Error selecting from records: %s\n", mysql_error(db_conn));
 			pfree(pool);
-			data->completed_zone = NULL;
 			goto continue_mysql;
 		}
 		mysql_result = mysql_store_result(db_conn);
-		mysql_recurse(pool, mysql_result, data->completed_zone, row_id, data);
+		mysql_recurse(pool, mysql_result, completed_zone, row_id, data);
 		mysql_free_result(mysql_result);
-		data->complete = 1;
-		struct zone* temporary_zone = data->saved_zone;
-		data->saved_zone = data->completed_zone;
-		data->completed_zone = NULL;
-		if (temporary_zone != NULL) {
-			pfree(temporary_zone->pool);
+		if (data->backup_zone != NULL) {
+			pfree(data->backup_zone->pool);
 		}
+		data->backup_zone = data->saved_zone;
+		data->saved_zone = completed_zone;
 		continue_mysql:;
 		mysql_close(db_conn);
-		sleep((unsigned int) data->refresh_rate);
+		sleep(data->refresh_rate < 1 ? 1 : (unsigned int) data->refresh_rate);
 	}
 }
 
