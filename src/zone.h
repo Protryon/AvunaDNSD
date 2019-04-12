@@ -8,7 +8,7 @@
 #ifndef ZONE_H_
 #define ZONE_H_
 
-#include "dns.h"
+#include "../lib/include/avuna/dns.h"
 #include <netinet/in.h>
 #include <avuna/log.h>
 #include <avuna/pmem.h>

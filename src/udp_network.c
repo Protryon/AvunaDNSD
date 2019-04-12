@@ -5,7 +5,7 @@
 #include "udp_network.h"
 #include "tcp_network.h"
 #include "dns_resolver.h"
-#include "dns.h"
+#include "../lib/include/avuna/dns.h"
 #include "server.h"
 #include <avuna/pmem.h>
 #include <netinet/in.h>

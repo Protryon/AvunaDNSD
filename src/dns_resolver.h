@@ -5,7 +5,7 @@
 #ifndef AVUNA_DNSD_DNS_RESOLVER_H
 #define AVUNA_DNSD_DNS_RESOLVER_H
 
-#include "dns.h"
+#include "../lib/include/avuna/dns.h"
 #include "zone.h"
 #include <avuna/pmem.h>
 #include <avuna/list.h>

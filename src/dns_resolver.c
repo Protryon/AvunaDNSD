@@ -3,7 +3,7 @@
 //
 
 #include "dns_resolver.h"
-#include "dns.h"
+#include "../lib/include/avuna/dns.h"
 #include "zone.h"
 #include "version.h"
 #include "globals.h"

@@ -2,11 +2,13 @@
 // Created by p on 4/9/19.
 //
 
-#include "dns.h"
+#include <avuna/dns.h>
 #include <avuna/pmem.h>
 #include <string.h>
 #include <netinet/in.h>
 
+
+// TODO: remove dnsd related metadata from the structs
 
 char* dns_parse_domain(struct mempool* pool, uint8_t* data, size_t* dom_offset, size_t len) {
     size_t i = *dom_offset;

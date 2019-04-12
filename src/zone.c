@@ -6,7 +6,7 @@
  */
 
 #include "zone.h"
-#include "dns.h"
+#include "../lib/include/avuna/dns.h"
 #include <avuna/util.h>
 #include <avuna/streams.h>
 #include <avuna/string.h>
