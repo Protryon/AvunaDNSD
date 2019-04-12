@@ -49,7 +49,6 @@ file(GLOB export_headers
     "lib/include/avuna/*.h"
 )
 
-
 file(GLOB config_files
     "cfg-default/*"
 )
@@ -61,7 +60,7 @@ set(CPACK_DEBIAN_PACKAGE_NAME avunadnsd)
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_PACKAGE_VERSION 3.0.0)
 if (MYSQL)
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS libmysqlclient20 (>= 5.7.25) avunautils (>= 1.0.0))
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libmysqlclient20 (>= 5.7.25), avunautils (>= 1.0.0)")
 endif()
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Max Bruce")
 set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "Adaptable authoritative nameserver")
