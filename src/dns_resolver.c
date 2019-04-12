@@ -137,13 +137,13 @@ void dns_respond_query(struct mempool* pool, struct dns_query* query, struct zon
         struct dns_question* question = query->questions->data[i];
         dns_resolve(question->type, question->domain, zone, query->answers, query->additional_answers, pool);
         for (size_t x = last_answer; x < query->answers->count; ++x) {
-            struct dns_record* record = query->answers->data[i];
+            struct dns_record* record = query->answers->data[x];
             record->in_response_to = question;
             question->has_responded_to = 1;
         }
         last_answer = query->answers->count;
         for (size_t x = last_additional_answer; x < query->additional_answers->count; ++x) {
-            struct dns_record* record = query->additional_answers->data[i];
+            struct dns_record* record = query->additional_answers->data[x];
             record->in_response_to = question;
             question->has_responded_to = 1;
         }

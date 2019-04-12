@@ -6,11 +6,7 @@
 #define AVUNA_DNSD_UDP_NETWORK_H
 
 #include "accept.h"
-#include "tcp_network.h"
 
-struct udp_param {
-    struct work_param* work_param;
-    struct accept_param* accept_param;
-};
+void run_udp_network(struct accept_param* param);
 
 #endif //AVUNA_DNSD_UDP_NETWORK_H

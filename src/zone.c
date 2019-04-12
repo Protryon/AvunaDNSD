@@ -118,6 +118,7 @@ int typeInt(const char* type) {
 void zone_parse_dns_entry(struct mempool* pool, struct logsess* log, char* file, ssize_t line_number, struct dns_entry* dns_entry, char* args[], size_t arg_count) {
 	struct dns_record* record = dns_entry->record = pcalloc(pool, sizeof(struct dns_record));
 	record->domain = str_dup(args[0], 0, pool);
+	record->class = 1;
 	char* ttl_split = strchr(args[2], '-');
 	if (ttl_split == NULL) {
 		uint32_t k = (uint32_t) strtoul(args[2], NULL, 10);

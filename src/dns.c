@@ -79,9 +79,6 @@ int dns_record_parse(struct dns_record* record, struct mempool* pool, uint8_t* b
     buf16 = (uint16_t*) (buf + *parse_i);
     record->class = htons(*buf16);
     *parse_i += 2;
-    if (record->class != 1) {
-        return 1; // class invalid
-    }
     uint32_t* buf32 = (uint32_t*) (buf + *parse_i);
     record->ttl = htonl(*buf32);
     *parse_i += 4;
@@ -304,7 +301,7 @@ int dns_record_serialize(struct dns_record* record, struct mempool* pool, uint8_
         memcpy(*buf + *buf_i, record->data.data, record->rdlength);
         *buf_i += record->rdlength;
     }
-    uint16_t rdlength = (uint16_t) (*buf_i - pre_data_index);
+    uint16_t rdlength = htons((uint16_t) (*buf_i - pre_data_index));
     memcpy(*buf + rdlength_index, &rdlength, 2);
     return 0;
 }
@@ -325,19 +322,16 @@ ssize_t dns_serialize(struct mempool* pool, struct dns_query* query, uint8_t** o
             return -1;
         }
     }
-    query->answers = pmalloc(pool, sizeof(struct dns_record) * query->header.ancount);
     for (int i = 0; i < query->header.ancount; ++i) {
         if (dns_record_serialize(query->answers->data[i], pool, &buf, &buf_i, &buf_cap)) {
             return -1;
         }
     }
-    query->nameservers = pmalloc(pool, sizeof(struct dns_record) * query->header.nscount);
     for (int i = 0; i < query->header.nscount; ++i) {
         if (dns_record_serialize(query->nameservers->data[i], pool, &buf, &buf_i, &buf_cap)) {
             return -1;
         }
     }
-    query->additional_answers = pmalloc(pool, sizeof(struct dns_record) * query->header.arcount);
     for (int i = 0; i < query->header.arcount; ++i) {
         if (dns_record_serialize(query->additional_answers->data[i], pool, &buf, &buf_i, &buf_cap)) {
             return -1;
@@ -346,7 +340,7 @@ ssize_t dns_serialize(struct mempool* pool, struct dns_query* query, uint8_t** o
 
     if (is_udp && buf_i > 512) {
         buf_i = 512;
-        query->header.tc = 1;
+        internal_header->tc = 1;
         memcpy(buf, &query->header, 12);
     }
     *out_buf = buf;

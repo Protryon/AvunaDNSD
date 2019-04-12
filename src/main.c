@@ -9,6 +9,7 @@
 #include "accept.h"
 #include "globals.h"
 #include "tcp_network.h"
+#include "udp_network.h"
 #include "mysql_zone.h"
 #include "version.h"
 #include "server.h"
@@ -56,14 +57,13 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 	const char* bind_mode = config_get(bind_node, "bind-mode");
 	const char* bind_ip = NULL;
 	uint16_t port = 0;
-	const char* bind_file = NULL;
 	int namespace;
 	int bind_all = 0;
 	int use_ipv6 = 0;
 	int udp = 0;
 	if (str_eq_case(bind_mode, "tcp") || (udp = str_eq_case(bind_mode, "udp"))) {
 		binding->binding_type = (uint8_t) (udp ? BINDING_UDP4 : BINDING_TCP4);
-		bind_ip = config_get(bind_node, "bind-ip");
+		bind_ip = config_get(bind_node, "ip");
 		if (bind_ip == NULL || str_eq_case(bind_ip, "0.0.0.0")) {
 			bind_all = 1;
 		}
@@ -71,7 +71,7 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 		if (use_ipv6) {
 			binding->binding_type = (uint8_t) (udp ? BINDING_UDP6 : BINDING_TCP6);
 		}
-		const char* bind_port = config_get(bind_node, "bind-port");
+		const char* bind_port = config_get(bind_node, "port");
 		if (bind_port != NULL && !str_isunum(bind_port)) {
 			errlog(delog, "Invalid bind-port for binding: %s", bind_node->name);
 			return 1;
@@ -84,7 +84,7 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 	}
 
 
-	int server_fd = socket(namespace, udp ? SOCK_DGRAM : SOCK_STREAM, IPPROTO_UDP);
+	int server_fd = socket(namespace, udp ? SOCK_DGRAM : SOCK_STREAM, 0);
 	if (server_fd < 0) {
 		errlog(delog, "Error creating socket for binding: %s, %s", bind_node->name, strerror(errno));
 		return 1;
@@ -112,7 +112,7 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 			return 1;
 		}
 		binding->binding.in6.sin6_port = htons(port);
-		if (bind(server_fd, (struct sockaddr*) &binding->binding.in6, sizeof(binding->binding.in6))) {
+		if (bind(server_fd, (struct sockaddr*) &binding->binding.in6, sizeof(struct sockaddr_in6))) {
 			if (bind_all) {
 				binding->binding_type = BINDING_TCP4;
 				goto sock;
@@ -128,7 +128,7 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 			return 1;
 		}
 		binding->binding.in4.sin_port = htons(port);
-		if (bind(server_fd, (struct sockaddr*) &binding->binding.in4, sizeof(binding->binding.in4))) {
+		if (bind(server_fd, (struct sockaddr*) &binding->binding.in4, sizeof(struct sockaddr_in))) {
 			errlog(delog, "Error binding socket for binding: %s, %s", bind_node->name, strerror(errno));
 			return 1;
 		}
@@ -136,11 +136,11 @@ int load_binding(struct config_node* bind_node, struct server_binding* binding) 
 		errlog(delog, "Invalid family for binding: %s", bind_node->name);
 		return 1;
 	}
-	if (listen(server_fd, 50)) {
+	if (!udp && listen(server_fd, 50)) {
 		errlog(delog, "Error listening on socket for binding: %s, %s", bind_node->name, strerror(errno));
 		return 1;
 	}
-	if (binding->binding_type != BINDING_UDP4 && binding->binding_type != BINDING_UDP6 && fcntl(server_fd, F_SETFL, fcntl(server_fd, F_GETFL) | O_NONBLOCK) < 0) {
+	if (!udp && fcntl(server_fd, F_SETFL, fcntl(server_fd, F_GETFL) | O_NONBLOCK) < 0) {
 		errlog(delog, "Error setting non-blocking for binding: %s, %s", bind_node->name, strerror(errno));
 		return 1;
 	}
@@ -230,11 +230,13 @@ int load_zone(struct config_node* node, struct server_zone* zone) {
 
 int main(int argc, char* argv[]) {
 	signal(SIGPIPE, SIG_IGN);
-	if (getuid() != 0 || getgid() != 0) {
-		printf("Must run as root!\n");
-		return 1;
-	}
-	global_pool = mempool_new();
+#ifndef DEBUG
+    if (getuid() != 0 || getgid() != 0) {
+        printf("Must run as root!\n");
+        return 1;
+    }
+#endif
+    global_pool = mempool_new();
 	printf("Loading Avuna %s %s\n", DAEMON_NAME, VERSION);
 #ifdef DEBUG
 	printf("Running in Debug mode!\n");
@@ -384,7 +386,7 @@ int main(int argc, char* argv[]) {
 			continue;
 		}
 		struct mempool* pool = mempool_new();
-		struct server_zone* zone = pmalloc(pool, sizeof(struct server_zone));
+		struct server_zone* zone = pcalloc(pool, sizeof(struct server_zone));
 		zone->pool = pool;
 
 		if (load_zone(zone_node, zone)) {
@@ -430,14 +432,16 @@ int main(int argc, char* argv[]) {
 		char* zone_name = (char*) config_get(serv, "zone");
 		if (zone_name == NULL) {
 			errlog(delog, "No zone name for server: %s", serv->name);
+            server_infos->data[server_infos->count - 1] = NULL;
 			continue;
 		}
-		char zones_dup[strlen(bindings) + 1];
-		strcpy(zones_dup, bindings);
+		char zones_dup[strlen(zone_name) + 1];
+		strcpy(zones_dup, zone_name);
 		zone_name = str_trim(zones_dup);
 		struct server_zone* zone = hashmap_get(zone_map, zone_name);
 		if (zone == NULL || zone->server != NULL) {
 			errlog(delog, "Invalid zone name for server: %s, %s", serv->name, zone_name);
+            server_infos->data[server_infos->count - 1] = NULL;
 			continue;
 		}
 		zone->server = info;
@@ -446,11 +450,13 @@ int main(int argc, char* argv[]) {
 		const char* tcc = config_get(serv, "threads");
 		if (!str_isunum(tcc)) {
 			errlog(delog, "Invalid threads for server: %s", serv->name);
+            server_infos->data[server_infos->count - 1] = NULL;
 			continue;
 		}
 		ssize_t tc = strtoul(tcc, NULL, 10);
 		if (tc < 1 || tc > 128) {
 			errlog(delog, "Invalid threads for server: %s, must be greater than 1 and less than 128.\n", serv->name);
+            server_infos->data[server_infos->count - 1] = NULL;
 			continue;
 		}
 		info->max_worker_count = (uint16_t) tc;
@@ -466,94 +472,6 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	/*int servsl;
-	struct config_node** servs = hashmap_get(cfg->nodeListsByCat, "server");
-	int sr = 0;
-	struct udptcp_accept_param aps[servsl];
-	for (int i = 0; i < servsl; i++) {
-
-		const char* zone = getConfigValue(serv, "master-zone");
-		int zfd = -1;
-		if (streq_nocase(zone, "mysql")) {
-
-		} else if (zone == NULL || (zfd = open(zone, O_CREAT | O_RDONLY, 0664)) < 0) {
-			if (serv->id != NULL) errlog(delog, "Invalid master-zone for server: %s", serv->id);
-			else errlog(delog, "Invalid master-zone for server");
-			close (sfd);
-			continue;
-		}
-		if (zfd >= 0) close(zfd);
-		if (propo == SOCK_STREAM) {
-			struct accept_param* ap = xmalloc(sizeof(struct accept_param));
-			if (serv->id != NULL) acclog(slog, "Server %s listening for connections!", serv->id);
-			else acclog(slog, "Server listening for connections!");
-			ap->port = port;
-			ap->zone = zonep;
-			ap->server_fd = sfd;
-			ap->config = serv;
-			ap->works_count = tc;
-			ap->works = xmalloc(sizeof(struct work_param*) * tc);
-			ap->logsess = slog;
-			struct udptcp_accept_param is_psuedo_type;
-			is_psuedo_type.tcp = 1;
-			is_psuedo_type.param.accept = ap;
-			aps[i] = is_psuedo_type;
-		} else {
-			if (serv->id != NULL) acclog(slog, "Server %s listening!", serv->id);
-			else acclog(slog, "Server listening!");
-			struct udptcp_accept_param is_psuedo_type;
-			is_psuedo_type.tcp = 0;
-			struct udp_accept_param uap;
-			uap.works = xmalloc(sizeof(struct udpwork_param*) * tc);
-			uap.works_count = tc;
-			uap.sfd = sfd;
-			is_psuedo_type.param.udp = uap;
-			aps[i] = is_psuedo_type;
-		}
-		struct mysql_zone* mysql_zone = xmalloc(sizeof(struct mysql_zone));
-		mysql_zone->mysql = mysql;
-		mysql_zone->host = host;
-		mysql_zone->port = port;
-		mysql_zone->username = username;
-		mysql_zone->password = password;
-		mysql_zone->schema = schema;
-		mysql_zone->completed_zone = NULL;
-		mysql_zone->refresh_rate = refresh_rate;
-		mysql_zone->complete = 0;
-		mysql_zone->saved_zone = NULL;
-		//thrs = new_collection(0);
-#ifdef SUPPORTS_MYSQL
-		if (mysql) {
-			pthread_t ptx;
-			int pc = pthread_create(&ptx, NULL, mysql_thread, mysql_zone);
-			if (pc) {
-				if (servs[i]->id != NULL) errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update @ %s server.", pc, servs[i]->id);
-				else errlog(delog, "Error creating thread: pthread errno = %i, mysql will not update.", pc);
-			}
-		}
-#endif
-		for (int x = 0; x < tc; x++) {
-			if (propo == SOCK_STREAM) {
-				struct work_param* wp = xmalloc(sizeof(struct work_param));
-				wp->conns = new_collection(mc < 1 ? 0 : mc / tc);
-				wp->logsess = slog;
-				wp->i = x;
-				wp->sport = port;
-				wp->zone = zonep;
-				wp->mysql = mysql_zone;
-				aps[i].param.accept->works[x] = wp;
-			} else {
-				struct udpwork_param* uwp = xmalloc(sizeof(struct udpwork_param));
-				uwp->logsess = slog;
-				uwp->i = x;
-				uwp->sfd = sfd;
-				uwp->zone = zonep;
-				uwp->mysql = mysql_zone;
-				aps[i].param.udp.works[x] = uwp;
-			}
-		}
-		sr++;
-	}*/
 	const char* uids = config_get(daemon, "uid");
 	const char* gids = config_get(daemon, "gid");
 	uid_t uid = (uid_t) (uids == NULL ? 0 : strtoul(uids, NULL, 10));
@@ -571,7 +489,9 @@ int main(int argc, char* argv[]) {
 	acclog(delog, "Running as UID = %u, GID = %u, starting workers.", getuid(), getgid());
 	for (size_t i = 0; i < server_infos->count; ++i) {
 		struct server_info* server = server_infos->data[i];
-
+        if (server == NULL) {
+            continue;
+        }
 #ifdef SUPPORTS_MYSQL
 		if (server->zone->type == SERVER_ZONE_MYSQL) {
 			pthread_t ptx;
@@ -582,38 +502,46 @@ int main(int argc, char* argv[]) {
 		}
 #endif
 
-
+        int has_tcp_binding = 0;
 		for (size_t j = 0; j < server->bindings->count; ++j) {
-			struct accept_param* param = pmalloc(server->pool, sizeof(struct accept_param));
-			param->server = server;
-			param->binding = server->bindings->data[j];
-			pthread_t pt;
-			int pthread_err = pthread_create(&pt, NULL, (void*) run_accept, param);
-			if (pthread_err != 0) {
-				errlog(delog, "Error creating accept thread: pthread errno = %i.", pthread_err);
-				continue;
-			}
-		}
+            struct server_binding* binding = server->bindings->data[j];
+            struct accept_param* param = pmalloc(server->pool, sizeof(struct accept_param));
+            param->server = server;
+            param->binding = binding;
+            pthread_t pt;
+            int pthread_err;
+            if (binding->binding_type == BINDING_UDP4 || binding->binding_type == BINDING_UDP6) {
+                pthread_err = pthread_create(&pt, NULL, (void*) run_udp_network, param);
+            } else {
+                has_tcp_binding = 1;
+                pthread_err = pthread_create(&pt, NULL, (void*) run_accept, param);
+            }
+            if (pthread_err != 0) {
+                errlog(delog, "Error creating accept thread: pthread errno = %i.", pthread_err);
+                continue;
+            }
+        }
 
 		struct list* works = list_new(server->max_worker_count, server->pool);
-
-		for (size_t j = 0; j < server->max_worker_count; ++j) {
-			struct work_param* param = pmalloc(server->pool, sizeof(struct work_param));
-			param->i = j;
-			param->server = server;
-			param->epoll_fd = epoll_create1(0);
-			if (param->epoll_fd < 0) {
-				errlog(param->server->logsess, "Failed to create epoll fd! %s", strerror(errno));
-				continue;
-			}
-			pthread_t pt;
-			int pthread_err = pthread_create(&pt, NULL, (void*) run_tcp_network, param);
-			if (pthread_err != 0) {
-				errlog(delog, "Error creating work thread: pthread errno = %i.", pthread_err);
-				continue;
-			}
-			list_append(works, param);
-		}
+        if (has_tcp_binding) {
+            for (size_t j = 0; j < server->max_worker_count; ++j) {
+                struct work_param* param = pmalloc(server->pool, sizeof(struct work_param));
+                param->i = j;
+                param->server = server;
+                param->epoll_fd = epoll_create1(0);
+                if (param->epoll_fd < 0) {
+                    errlog(param->server->logsess, "Failed to create epoll fd! %s", strerror(errno));
+                    continue;
+                }
+                pthread_t pt;
+                int pthread_err = pthread_create(&pt, NULL, (void*) run_tcp_network, param);
+                if (pthread_err != 0) {
+                    errlog(delog, "Error creating work thread: pthread errno = %i.", pthread_err);
+                    continue;
+                }
+                list_append(works, param);
+            }
+        }
 
 		struct wake_thread_arg* wt_arg = pmalloc(server->pool, sizeof(struct wake_thread_arg));
 		wt_arg->work_params = works;
