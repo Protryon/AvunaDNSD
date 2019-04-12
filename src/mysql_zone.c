@@ -67,7 +67,7 @@ int mysql_recurse(struct mempool* pool, MYSQL_RES* mysql_result, struct zone* cu
 			if (mysql_recurse(pool, mysql_result, entry->part.subzone, row_id, mysql_zone) == -1) return -1;
 			mysql_data_seek(mysql_result, (my_ulonglong) seek_offset);
 		} else {
-			char* data = str_dup(row[7], 0, pool); // rec_data
+			char* data = str_trim(str_dup(row[7], 0, pool)); // rec_data
 			char* args[64]; // status: make 3
 			args[0] = row[1];
 			args[1] = row[5];
@@ -76,27 +76,29 @@ int mysql_recurse(struct mempool* pool, MYSQL_RES* mysql_result, struct zone* cu
 			int in_escape = 0;
 			int in_quote = 0;
 			size_t data_length = strlen(data);
-			args[arg_index++] = data + ((data_length > 0 && data[0] == '"') ? 1 : 0);
-			for (size_t i = 0; i < data_length; i++) {
-				if (data[i] == '\\') { // TODO: remove extra backslashes
-					in_escape = !in_escape;
-				}
-				if (!in_escape && data[i] == '"') {
-					in_quote = !in_quote;
-				} else if (!in_escape && !in_quote && isspace(data[i])) {
-					data[i] = 0;
-					if (i > 0 && data[i - 1] == '"') data[i - 1] = 0;
-					args[arg_index++] = data + i + 1;
-				}
-				if (arg_index > 62) break;
-			}
-			if (arg_index > 0) {
-				size_t last_arg_length = strlen(args[arg_index - 1]);
-				if(last_arg_length > 0 && args[arg_index - 1][last_arg_length - 1] == '"') {
-					args[arg_index - 1][last_arg_length - 1] = 0;
-				}
-			}
-			args[arg_index] = NULL;
+			if (data_length > 0) {
+                args[arg_index++] = data + ((data_length > 0 && data[0] == '"') ? 1 : 0);
+                for (size_t i = 0; i < data_length; i++) {
+                    if (data[i] == '\\') { // TODO: remove extra backslashes
+                        in_escape = !in_escape;
+                    }
+                    if (!in_escape && data[i] == '"') {
+                        in_quote = !in_quote;
+                    } else if (!in_escape && !in_quote && isspace(data[i])) {
+                        data[i] = 0;
+                        if (i > 0 && data[i - 1] == '"') data[i - 1] = 0;
+                        args[arg_index++] = data + i + 1;
+                    }
+                    if (arg_index > 62) break;
+                }
+                if (arg_index > 0) {
+                    size_t last_arg_length = strlen(args[arg_index - 1]);
+                    if(last_arg_length > 0 && args[arg_index - 1][last_arg_length - 1] == '"') {
+                        args[arg_index - 1][last_arg_length - 1] = 0;
+                    }
+                }
+            }
+            args[arg_index] = NULL;
 			entry->type = ZONE_ENTRY;
 			struct dns_entry* dns_entry = &entry->part.dom;
 			zone_parse_dns_entry(pool, mysql_zone->zone->server->logsess, mysql_zone->schema, row_id, dns_entry, args, arg_index);
