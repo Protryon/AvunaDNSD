@@ -23,7 +23,7 @@
 #include <sys/epoll.h>
 #include <stdint.h>
 
-int handleRead(struct conn* conn, struct work_param* param, struct zone* zone) {
+int handleRead(struct conn* conn, struct work_param* param) {
 	if (conn->read_buffer.size >= 2) {
 		uint16_t len = 0;
 		buffer_peek(&conn->read_buffer, 2, (uint8_t*) &len);
@@ -38,16 +38,30 @@ int handleRead(struct conn* conn, struct work_param* param, struct zone* zone) {
 			buffer_pop(&conn->read_buffer, 2 + packet_length, total_packet);
 			total_packet += 2;
 			struct dns_query* query = dns_parse(query_pool, total_packet, packet_length);
-			dns_respond_query(query_pool, query, zone);
+            struct zone* active_zone = NULL;
+            int mysql = param->server->zone->type == SERVER_ZONE_MYSQL;
+            if (param->server->zone->type == SERVER_ZONE_FILE) {
+                active_zone = param->server->zone->data.file_zone;
+            } else if (mysql) {
+                pthread_rwlock_rdlock(&param->server->zone->data.mysql_zone->update_lock);
+                active_zone = param->server->zone->data.mysql_zone->saved_zone;
+            }
+			dns_respond_query(query_pool, query, active_zone);
 			uint8_t* out_buf = NULL;
 			ssize_t serialized_length = dns_serialize(conn->pool, query, &out_buf, 0);
 			if (serialized_length > 0) {
 				buffer_push(&conn->write_buffer, out_buf, (size_t) serialized_length);
 				dns_report((struct sockaddr*) &conn->addr, query, param->server->logsess);
 				if (trigger_write(conn)) {
+				    if (mysql) {
+                        pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
+                    }
 					return 1;
 				}
 			}
+            if (mysql) {
+                pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
+            }
 			pfree(query_pool);
 		}
 	}
@@ -90,15 +104,8 @@ int trigger_write(struct conn* conn) {
 void run_tcp_network(struct work_param* param) {
 	struct mempool* pool = mempool_new();
 	struct epoll_event* events = pmalloc(pool, 1024 * sizeof(struct epoll_event));
-	struct zone* active_zone = NULL;
-	if (param->server->zone->type == SERVER_ZONE_FILE) {
-		active_zone = param->server->zone->data.file_zone;
-	}
-	while (1) {
+    while (1) {
 		int event_count = epoll_wait(param->epoll_fd, events, 1024, -1);
-		if (param->server->zone->type == SERVER_ZONE_MYSQL && active_zone != param->server->zone->data.mysql_zone->saved_zone) {
-			active_zone = param->server->zone->data.mysql_zone->saved_zone;
-		}
 		if (event_count < 0) {
 			printf("Epoll error in worker thread! %s\n", strerror(errno));
 		} else if (event_count == 0) continue;
@@ -142,7 +149,7 @@ void run_tcp_network(struct work_param* param) {
 					}
 					r += x;
 				}
-				int p = handleRead(conn, param, active_zone);
+				int p = handleRead(conn, param);
 				if (p == 1) {
 					pfree(conn->pool);
 					continue;
