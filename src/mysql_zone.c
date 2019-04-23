@@ -167,11 +167,12 @@ void mysql_thread(struct mysql_zone* data) {
 		mysql_result = mysql_store_result(db_conn);
 		mysql_recurse(pool, mysql_result, completed_zone, row_id, data);
 		mysql_free_result(mysql_result);
-		if (data->backup_zone != NULL) {
-			pfree(data->backup_zone->pool);
+		pthread_rwlock_wrlock(&data->update_lock);
+		if (data->saved_zone != NULL) {
+			pfree(data->saved_zone->pool);
 		}
-		data->backup_zone = data->saved_zone;
 		data->saved_zone = completed_zone;
+        pthread_rwlock_unlock(&data->update_lock);
 		continue_mysql:;
 		mysql_close(db_conn);
 		sleep(data->refresh_rate < 1 ? 1 : (unsigned int) data->refresh_rate);

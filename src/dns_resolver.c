@@ -14,7 +14,7 @@
 
 void dns_resolve(uint16_t type, char* domain, struct zone* zone, struct zone* root_zone, struct list* records, struct list* additional_records, struct mempool* pool, int depth);
 
-void dns_prepare_additional_records(struct dns_record* record, struct zone* zone, struct list* records, struct list* additional_records, struct mempool* pool, int depth) {
+void dns_prepare_additional_records(struct dns_record* record, struct zone* zone, struct list* additional_records, struct mempool* pool, int depth) {
     if (record->type == DNS_CNAME) {
         dns_resolve(1, record->data.appended_domain.domain, zone, zone, additional_records, additional_records, pool, depth + 1);
     } else if (record->type == DNS_MX) {
@@ -74,7 +74,7 @@ void dns_resolve(uint16_t type, char* domain, struct zone* zone, struct zone* ro
                     record->domain = domain;
                     record->ttl = entry->part.dom.ttl_minimum + (entry->part.dom.ttl_maximum == entry->part.dom.ttl_minimum ? 0 : (rand() % (entry->part.dom.ttl_maximum - entry->part.dom.ttl_minimum)));
                     list_append(records, record);
-                    dns_prepare_additional_records(record, root_zone, records, additional_records, pool);
+                    dns_prepare_additional_records(record, root_zone, additional_records, pool, depth);
                 }
             }
         } else if (entry->type == ZONE_ROUNDSTART) {
@@ -88,7 +88,7 @@ void dns_resolve(uint16_t type, char* domain, struct zone* zone, struct zone* ro
                     record->domain = domain;
                     record->ttl = round_robin_entry->part.dom.ttl_minimum + (round_robin_entry->part.dom.ttl_maximum == round_robin_entry->part.dom.ttl_minimum ? 0 : (rand() % (round_robin_entry->part.dom.ttl_maximum - round_robin_entry->part.dom.ttl_minimum)));
                     list_append(records, record);
-                    dns_prepare_additional_records(record, root_zone, records, additional_records, pool);
+                    dns_prepare_additional_records(record, root_zone, additional_records, pool, depth);
                 }
             } else {
                 size_t shuffled_index = rand() % round_robin->count;
@@ -98,7 +98,7 @@ void dns_resolve(uint16_t type, char* domain, struct zone* zone, struct zone* ro
                     record->domain = domain;
                     record->ttl = round_robin_entry->part.dom.ttl_minimum + (round_robin_entry->part.dom.ttl_maximum == round_robin_entry->part.dom.ttl_minimum ? 0 : (rand() % (round_robin_entry->part.dom.ttl_maximum - round_robin_entry->part.dom.ttl_minimum)));
                     list_append(records, record);
-                    dns_prepare_additional_records(record, root_zone, records, additional_records, pool);
+                    dns_prepare_additional_records(record, root_zone, additional_records, pool, depth);
                     ++shuffled_index;
                     if (shuffled_index >= round_robin->count) {
                         shuffled_index = 0;

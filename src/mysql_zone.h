@@ -14,6 +14,7 @@
 #include "zone.h"
 #include "server.h"
 #include <avuna/pmem.h>
+#include <pthread.h>
 
 
 struct mysql_zone {
@@ -24,8 +25,8 @@ struct mysql_zone {
     char* password;
     char* schema;
     size_t refresh_rate;
+    pthread_rwlock_t update_lock;
     struct zone* saved_zone;
-    struct zone* backup_zone;
     struct server_zone* zone;
 };
 

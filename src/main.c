@@ -218,6 +218,7 @@ int load_zone(struct config_node* node, struct server_zone* zone) {
 		dns_zone->password = password;
 		dns_zone->schema = schema;
 		dns_zone->zone = zone;
+		pthread_rwlock_init(&dns_zone->update_lock, NULL);
 		zone->type = SERVER_ZONE_MYSQL;
 		zone->data.mysql_zone = dns_zone;
 #endif
