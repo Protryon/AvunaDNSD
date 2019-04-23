@@ -59,9 +59,9 @@ int handleRead(struct conn* conn, struct work_param* param) {
 					return 1;
 				}
 			}
-            if (mysql) {
-                pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
-            }
+			if (mysql) {
+				pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
+			}
 			pfree(query_pool);
 		}
 	}

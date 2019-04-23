@@ -39,28 +39,28 @@ int mysql_recurse(struct mempool* pool, MYSQL_RES* mysql_result, struct zone* cu
 			seek_offset++;
 			continue;
 		}
-		struct zone_entry* entry = pmalloc(pool, sizeof(struct zone_entry));
+		struct zone_entry* entry = pcalloc(pool, sizeof(struct zone_entry));
 		list_append(current_zone->entries, entry);
 		ssize_t round_robin_per = strtol(row[4], NULL, 10);
 		uint64_t row_id = strtoull(row[0], NULL, 10);
 		if (round_robin_per != last_round_robin_per && last_round_robin_per == 0) {
 			entry->type = ZONE_ROUNDSTART;
 			entry->part.roundrobin.per = round_robin_per;
-			entry = pmalloc(pool, sizeof(struct zone_entry));
+			entry = pcalloc(pool, sizeof(struct zone_entry));
 		} else if (round_robin_per != last_round_robin_per && round_robin_per == 0) {
 			entry->type = ZONE_ROUNDSTOP;
-			entry = pmalloc(pool, sizeof(struct zone_entry));
+			entry = pcalloc(pool, sizeof(struct zone_entry));
 		} else if (round_robin_per != last_round_robin_per) {
 			entry->type = ZONE_ROUNDSTOP;
-			entry = pmalloc(pool, sizeof(struct zone_entry));
+			entry = pcalloc(pool, sizeof(struct zone_entry));
 			list_append(current_zone->entries, entry);
 			entry->type = ZONE_ROUNDSTART;
 			entry->part.roundrobin.per = round_robin_per;
-			entry = pmalloc(pool, sizeof(struct zone_entry));
+			entry = pcalloc(pool, sizeof(struct zone_entry));
 		}
 		if (row[5] == NULL) { // rec_type
 			entry->type = ZONE_SUBZONE;
-			entry->part.subzone = pmalloc(pool, sizeof(struct zone));
+			entry->part.subzone = pcalloc(pool, sizeof(struct zone));
 			entry->part.subzone->pool = pool;
 			entry->part.subzone->domain = str_dup(row[1], 0, pool);
 			entry->part.subzone->entries = list_new(8, pool);
@@ -107,7 +107,7 @@ int mysql_recurse(struct mempool* pool, MYSQL_RES* mysql_result, struct zone* cu
 		last_round_robin_per = round_robin_per;
 	}
 	if(last_round_robin_per != 0) {
-		struct zone_entry* entry = pmalloc(pool, sizeof(struct zone_entry));
+		struct zone_entry* entry = pcalloc(pool, sizeof(struct zone_entry));
 		entry->type = ZONE_ROUNDSTOP;
 		list_append(current_zone->entries, entry);
 	}

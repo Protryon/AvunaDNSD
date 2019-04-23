@@ -13,7 +13,7 @@ if (MYSQL)
     set(CMAKE_C_FLAGS  "${CMAKE_C_FLAGS} -DSUPPORTS_MYSQL")
 endif()
 
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG")
+set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -DDEBUG -fno-omit-frame-pointer")
 
 
 file(GLOB dnsd_src

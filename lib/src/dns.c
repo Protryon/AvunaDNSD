@@ -48,7 +48,11 @@ char* dns_parse_domain(struct mempool* pool, uint8_t* data, size_t* dom_offset, 
         if (!finished) *dom_offset = i;
     }
     if (!finished) (*dom_offset)++; // account for ending
-    dom[dom_index - 1] = 0;
+    if (dom_index > 0) {
+        dom[dom_index - 1] = 0;
+    } else {
+        dom[0] = 0;
+    }
     return dom;
 }
 
@@ -208,7 +212,7 @@ struct dns_query* dns_parse(struct mempool* pool, uint8_t* buf, ssize_t length) 
         if (dns_record_parse(record, pool, buf, &parse_i, length)) {
             return NULL;
         }
-        list_append(query->answers, record);
+        list_append(query->nameservers, record);
     }
     query->additional_answers = list_new(query->header.arcount, pool);
     for (int i = 0; i < query->header.arcount; ++i) {
@@ -216,7 +220,7 @@ struct dns_query* dns_parse(struct mempool* pool, uint8_t* buf, ssize_t length) 
         if (dns_record_parse(record, pool, buf, &parse_i, length)) {
             return NULL;
         }
-        list_append(query->answers, record);
+        list_append(query->additional_answers, record);
     }
     return query;
 }

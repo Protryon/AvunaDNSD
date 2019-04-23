@@ -47,10 +47,10 @@ void run_udp_network(struct accept_param* param) {
                 sendto(param->binding->fd, out_buf, (size_t) serialized_length, 0, (const struct sockaddr*) &addr, addrl);
                 dns_report((struct sockaddr*) &addr, query, param->server->logsess);
             }
-            pfree(query_pool);
             if (mysql) {
                 pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
             }
+            pfree(query_pool);
         }
     }
 #pragma clang diagnostic pop
