@@ -39,13 +39,15 @@ void run_udp_network(struct accept_param* param) {
             }
             struct mempool* query_pool = mempool_new();
             struct dns_query* query = dns_parse(query_pool, message_buf, x);
-            dns_respond_query(query_pool, query, active_zone);
-            uint8_t* out_buf = NULL;
-            ssize_t serialized_length = dns_serialize(query_pool, query, &out_buf, 1);
-            if (serialized_length > 0) {
-                // sendto can fail, but what we do regardless is cleanup
-                sendto(param->binding->fd, out_buf, (size_t) serialized_length, 0, (const struct sockaddr*) &addr, addrl);
-                dns_report((struct sockaddr*) &addr, query, param->server->logsess);
+            if (query != NULL) {
+                dns_respond_query(query_pool, query, active_zone);
+                uint8_t* out_buf = NULL;
+                ssize_t serialized_length = dns_serialize(query_pool, query, &out_buf, 1);
+                if (serialized_length > 0) {
+                    // sendto can fail, but what we do regardless is cleanup
+                    sendto(param->binding->fd, out_buf, (size_t) serialized_length, 0, (const struct sockaddr*) &addr, addrl);
+                    dns_report((struct sockaddr*) &addr, query, param->server->logsess);
+                }
             }
             if (mysql) {
                 pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);

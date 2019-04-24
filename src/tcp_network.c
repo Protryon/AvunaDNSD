@@ -38,25 +38,27 @@ int handleRead(struct conn* conn, struct work_param* param) {
 			buffer_pop(&conn->read_buffer, 2 + packet_length, total_packet);
 			total_packet += 2;
 			struct dns_query* query = dns_parse(query_pool, total_packet, packet_length);
-            struct zone* active_zone = NULL;
-            int mysql = param->server->zone->type == SERVER_ZONE_MYSQL;
-            if (param->server->zone->type == SERVER_ZONE_FILE) {
-                active_zone = param->server->zone->data.file_zone;
-            } else if (mysql) {
-                pthread_rwlock_rdlock(&param->server->zone->data.mysql_zone->update_lock);
-                active_zone = param->server->zone->data.mysql_zone->saved_zone;
-            }
-			dns_respond_query(query_pool, query, active_zone);
-			uint8_t* out_buf = NULL;
-			ssize_t serialized_length = dns_serialize(conn->pool, query, &out_buf, 0);
-			if (serialized_length > 0) {
-				buffer_push(&conn->write_buffer, out_buf, (size_t) serialized_length);
-				dns_report((struct sockaddr*) &conn->addr, query, param->server->logsess);
-				if (trigger_write(conn)) {
-				    if (mysql) {
-                        pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
-                    }
-					return 1;
+			int mysql = param->server->zone->type == SERVER_ZONE_MYSQL;
+			if (query != NULL) {
+				struct zone* active_zone = NULL;
+				if (param->server->zone->type == SERVER_ZONE_FILE) {
+					active_zone = param->server->zone->data.file_zone;
+				} else if (mysql) {
+					pthread_rwlock_rdlock(&param->server->zone->data.mysql_zone->update_lock);
+					active_zone = param->server->zone->data.mysql_zone->saved_zone;
+				}
+				dns_respond_query(query_pool, query, active_zone);
+				uint8_t* out_buf = NULL;
+				ssize_t serialized_length = dns_serialize(conn->pool, query, &out_buf, 0);
+				if (serialized_length > 0) {
+					buffer_push(&conn->write_buffer, out_buf, (size_t) serialized_length);
+					dns_report((struct sockaddr*) &conn->addr, query, param->server->logsess);
+					if (trigger_write(conn)) {
+						if (mysql) {
+							pthread_rwlock_unlock(&param->server->zone->data.mysql_zone->update_lock);
+						}
+						return 1;
+					}
 				}
 			}
 			if (mysql) {
