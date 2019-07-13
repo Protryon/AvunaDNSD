@@ -147,7 +147,7 @@ void run_tcp_network(struct work_param* param) {
 							break;
 						}
 						pfree(conn->pool);
-						continue;
+						goto continue_outer;
 					}
 					r += x;
 				}
@@ -157,6 +157,7 @@ void run_tcp_network(struct work_param* param) {
 					continue;
 				}
 			}
+		    continue_outer:;
 		}
 	}
 	pfree(pool);

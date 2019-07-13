@@ -177,14 +177,23 @@ void dns_report(struct sockaddr* addr, struct dns_query* query, struct logsess* 
 
     for (size_t i = 0; i < query->answers->count; ++i) {
         struct dns_record* record = query->answers->data[i];
+        if (record == NULL || record->in_response_to == NULL) {
+            continue;
+        }
         acclog(log, "%s requested %s for %s, returned %s %s", ip_string, typeString(record->in_response_to->type), record->in_response_to->domain, typeString(record->type), record->description);
     }
     for (size_t i = 0; i < query->additional_answers->count; ++i) {
         struct dns_record* record = query->additional_answers->data[i];
+        if (record == NULL || record->in_response_to == NULL) {
+            continue;
+        }
         acclog(log, "%s requested %s for %s, returned<assume> %s %s", ip_string, typeString(record->in_response_to->type), record->in_response_to->domain, typeString(record->type), record->description);
     }
     for (size_t i = 0; i < query->questions->count; ++i) {
         struct dns_question* question = query->questions->data[i];
+        if (question == NULL) {
+            continue;
+        }
         if (!question->has_responded_to) {
             acclog(log, "%s requested %s for %s, returned nothing", ip_string, typeString(question->type), question->domain);
         }
